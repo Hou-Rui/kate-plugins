@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Id": "katebookmarksplugin",
+        "Name": "Project Bookmarks",
+        "Description": "Shows and navigates all bookmarks in the current project.",
+        "Icon": "bookmark",
+        "Version": "1.0",
+        "Category": "Utilities",
+        "Authors": [
+            {
+                "Name": "Hou Rui",
+                "Email": "houruinus@gmail.com"
+            }
+        ],
+        "License": "MIT",
+        "Dependencies": [
+            "ktexteditor"
+        ]
+    }
+}
