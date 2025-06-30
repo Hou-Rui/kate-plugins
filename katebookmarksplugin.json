@@ -1,7 +1,7 @@
 {
     "KPlugin": {
         "Id": "katebookmarksplugin",
-        "Name": "Project Bookmarks",
+        "Name": "Bookmarks",
         "Description": "Shows and navigates all bookmarks in the current project.",
         "Icon": "bookmark",
         "Version": "1.0",
