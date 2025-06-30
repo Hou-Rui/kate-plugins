@@ -16,7 +16,7 @@ public:
     QObject *createView(KTextEditor::MainWindow *mainWindow) override;
 };
 
-class KateBookmarksView : public QObject, public KXMLGUIClient
+class KateBookmarksView : public QObject
 {
     Q_OBJECT
 public:
