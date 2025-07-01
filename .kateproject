@@ -17,10 +17,6 @@
       {
         "name": "cmake-build",
         "build_cmd": "cmake --build ."
-      },
-      {
-        "name": "cmake-install",
-        "build_cmd": "sudo cmake --install ."
       }
     ]
   }

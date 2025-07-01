@@ -1,12 +1,12 @@
 #pragma once
 
-#include <QListWidget>
+#include <QTreeWidget>
 #include <QObject>
 
 #include <KTextEditor/Document>
 #include <KTextEditor/Plugin>
 #include <KTextEditor/View>
-#include <KXMLGUIClient>
+#include <KToolBar>
 
 class KateBookmarksPlugin : public KTextEditor::Plugin
 {
@@ -21,11 +21,12 @@ class KateBookmarksView : public QObject
     Q_OBJECT
 public:
     explicit KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow);
+    ~KateBookmarksView();
 
 public Q_SLOTS:
     void refreshAllBookmarks();
     void refreshBookmarks(KTextEditor::Document *document);
-    void jumpToBookmark(QListWidgetItem *item);
+    void jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark);
 
 private:
     enum ItemDataRole {
@@ -39,5 +40,6 @@ private:
     KateBookmarksPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_toolView = nullptr;
-    QListWidget *m_listWidget = nullptr;
+    KToolBar *m_toolBar = nullptr;
+    QTreeWidget *m_treeWidget = nullptr;
 };

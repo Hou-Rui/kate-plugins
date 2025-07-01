@@ -7,11 +7,15 @@
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/View>
+#include <KXMLGUIFactory>
+
+#include <QAction>
+#include <QHeaderView>
 #include <QIcon>
-#include <QListWidget>
 #include <QVBoxLayout>
 #include <QVariantMap>
-
+#include <ktexteditor/application.h>
+#include <ktexteditor/document.h>
 
 K_PLUGIN_CLASS_WITH_JSON(KateBookmarksPlugin, "katebookmarksplugin.json")
 
@@ -27,16 +31,17 @@ QObject *KateBookmarksPlugin::createView(KTextEditor::MainWindow *mainWindow)
 
 void KateBookmarksView::showMessage(const QString &msg)
 {
-    m_mainWindow->showMessage({
-        { QStringLiteral("category"), QStringLiteral("Bookmarks") },
-        { QStringLiteral("categoryIcon"), QIcon::fromTheme(QStringLiteral("system-run")) },
-        { QStringLiteral("type"), QStringLiteral("Log") },
-        { QStringLiteral("text"), msg }
-    });
+    QVariantMap map{{QStringLiteral("category"), QStringLiteral("Bookmarks")},
+                    {QStringLiteral("categoryIcon"), QIcon::fromTheme(QStringLiteral("system-run"))},
+                    {QStringLiteral("type"), QStringLiteral("Log")},
+                    {QStringLiteral("text"), msg}};
+    QMetaObject::invokeMethod(m_mainWindow->parent(), "showMessage", Qt::DirectConnection, Q_ARG(QVariantMap, map));
 }
 
 KateBookmarksView::KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow)
-    : QObject(plugin), m_plugin(plugin), m_mainWindow(mainWindow)
+    : QObject(plugin)
+    , m_plugin(plugin)
+    , m_mainWindow(mainWindow)
 {
     showMessage("view init!");
     setupUi();
@@ -51,27 +56,39 @@ void KateBookmarksView::setupUi()
                                               QIcon::fromTheme(QStringLiteral("bookmarks")),
                                               tr("Bookmarks"));
     m_toolView->setLayout(new QVBoxLayout());
-    m_listWidget = new QListWidget(m_toolView);
-    m_toolView->layout()->addWidget(m_listWidget);
+    m_treeWidget = new QTreeWidget(m_toolView);
+    m_treeWidget->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    m_treeWidget->setHeaderLabel(tr("Bookmarks"));
+    m_treeWidget->header()->setDefaultAlignment(Qt::AlignCenter);
+    m_toolView->layout()->addWidget(m_treeWidget);
 }
 
 void KateBookmarksView::connectSignals()
 {
-    auto editor = KTextEditor::Editor::instance();
-    connect(editor, &KTextEditor::Editor::documentCreated, this, [this](auto, auto document) {
-        showMessage("Document created!");
+    auto app = KTextEditor::Editor::instance()->application();
+    connect(app, &KTextEditor::Application::documentCreated, this, [this](KTextEditor::Document *document) {
         connect(document, &KTextEditor::Document::markChanged, this, [this](auto, auto, auto) {
-            showMessage("Mark created!");
             refreshAllBookmarks();
         });
         refreshAllBookmarks();
     });
-    connect(m_listWidget, &QListWidget::itemDoubleClicked, this, &KateBookmarksView::jumpToBookmark);
+
+    connect(m_treeWidget, &QTreeWidget::itemDoubleClicked, this, [this](QTreeWidgetItem *item, auto) {
+        auto document = item->data(0, DocumentRole).value<KTextEditor::Document *>();
+        auto mark = item->data(0, MarkRole).value<KTextEditor::Mark *>();
+        if (document && mark) {
+            jumpToBookmark(document, mark);
+        }
+    });
+}
+
+KateBookmarksView::~KateBookmarksView()
+{
 }
 
 void KateBookmarksView::refreshAllBookmarks()
 {
-    m_listWidget->clear();
+    m_treeWidget->clear();
     auto documents = KTextEditor::Editor::instance()->documents();
     for (auto document : documents) {
         refreshBookmarks(document);
@@ -80,6 +97,12 @@ void KateBookmarksView::refreshAllBookmarks()
 
 void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
 {
+    if (!document->url().isValid()) {
+        return;
+    }
+    auto fileItem = new QTreeWidgetItem({document->url().fileName()});
+    fileItem->setText(0, document->url().fileName());
+    fileItem->setIcon(0, QIcon::fromTheme(QStringLiteral("document-multiple")));
     auto marks = document->marks();
     for (auto mark : marks) {
         if (!(mark->type & KTextEditor::Document::Bookmark)) {
@@ -87,19 +110,24 @@ void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
         }
         auto lineContent = document->line(mark->line).trimmed();
         auto itemContent = QString("%1: %2").arg(mark->line + 1).arg(lineContent);
-        auto *item = new QListWidgetItem(itemContent);
-        item->setData(DocumentRole, QVariant::fromValue(document));
-        item->setData(MarkRole, QVariant::fromValue(mark));
-        m_listWidget->addItem(item);
+        auto *item = new QTreeWidgetItem({itemContent});
+        item->setIcon(0, QIcon::fromTheme(QStringLiteral("bookmarks")));
+        item->setData(0, DocumentRole, QVariant::fromValue(document));
+        item->setData(0, MarkRole, QVariant::fromValue(mark));
+        fileItem->addChild(item);
     }
+    
+    if (fileItem->childCount() == 0) {
+        delete fileItem;
+        return;
+    }
+    m_treeWidget->addTopLevelItem(fileItem);
+    fileItem->setExpanded(true);
 }
 
-void KateBookmarksView::jumpToBookmark(QListWidgetItem *item)
+void KateBookmarksView::jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark)
 {
     showMessage("Jump to Bookmark!");
-    auto document = item->data(DocumentRole).value<KTextEditor::Document *>();
-    auto mark = item->data(MarkRole).value<KTextEditor::Mark *>();
-
     if (auto view = m_mainWindow->openUrl(document->url())) {
         view->setCursorPosition(KTextEditor::Cursor(mark->line, 0));
     }
