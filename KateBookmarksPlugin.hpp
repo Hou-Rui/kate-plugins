@@ -28,8 +28,15 @@ public Q_SLOTS:
     void jumpToBookmark(QListWidgetItem *item);
 
 private:
+    enum ItemDataRole {
+        DocumentRole = Qt::UserRole,
+        MarkRole = Qt::UserRole + 1,
+    };
     void showMessage(const QString &msg);
+    void setupUi();
+    void connectSignals();
 
+    KateBookmarksPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_toolView = nullptr;
     QListWidget *m_listWidget = nullptr;

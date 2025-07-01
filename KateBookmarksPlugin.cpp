@@ -29,23 +29,34 @@ void KateBookmarksView::showMessage(const QString &msg)
 {
     m_mainWindow->showMessage({
         { QStringLiteral("category"), QStringLiteral("Bookmarks") },
+        { QStringLiteral("categoryIcon"), QIcon::fromTheme(QStringLiteral("system-run")) },
         { QStringLiteral("type"), QStringLiteral("Log") },
         { QStringLiteral("text"), msg }
     });
 }
 
 KateBookmarksView::KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow)
-    : QObject(plugin), m_mainWindow(mainWindow)
+    : QObject(plugin), m_plugin(plugin), m_mainWindow(mainWindow)
 {
     showMessage("view init!");
-    m_toolView = m_mainWindow->createToolView(plugin,
+    setupUi();
+    connectSignals();
+}
+
+void KateBookmarksView::setupUi()
+{
+    m_toolView = m_mainWindow->createToolView(m_plugin,
                                               "katebookmarksplugin",
                                               KTextEditor::MainWindow::Left,
                                               QIcon::fromTheme(QStringLiteral("bookmarks")),
                                               tr("Bookmarks"));
+    m_toolView->setLayout(new QVBoxLayout());
     m_listWidget = new QListWidget(m_toolView);
     m_toolView->layout()->addWidget(m_listWidget);
+}
 
+void KateBookmarksView::connectSignals()
+{
     auto editor = KTextEditor::Editor::instance();
     connect(editor, &KTextEditor::Editor::documentCreated, this, [this](auto, auto document) {
         showMessage("Document created!");
@@ -77,8 +88,8 @@ void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
         auto lineContent = document->line(mark->line).trimmed();
         auto itemContent = QString("%1: %2").arg(mark->line + 1).arg(lineContent);
         auto *item = new QListWidgetItem(itemContent);
-        item->setData(Qt::UserRole, QVariant::fromValue(document));
-        item->setData(Qt::UserRole + 1, QVariant::fromValue(mark));
+        item->setData(DocumentRole, QVariant::fromValue(document));
+        item->setData(MarkRole, QVariant::fromValue(mark));
         m_listWidget->addItem(item);
     }
 }
@@ -86,8 +97,8 @@ void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
 void KateBookmarksView::jumpToBookmark(QListWidgetItem *item)
 {
     showMessage("Jump to Bookmark!");
-    auto document = item->data(Qt::UserRole).value<KTextEditor::Document *>();
-    auto mark = item->data(Qt::UserRole + 1).value<KTextEditor::Mark *>();
+    auto document = item->data(DocumentRole).value<KTextEditor::Document *>();
+    auto mark = item->data(MarkRole).value<KTextEditor::Mark *>();
 
     if (auto view = m_mainWindow->openUrl(document->url())) {
         view->setCursorPosition(KTextEditor::Cursor(mark->line, 0));
