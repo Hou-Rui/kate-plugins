@@ -21,9 +21,10 @@ class KateBookmarksView : public QObject
     Q_OBJECT
 public:
     explicit KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow);
-    ~KateBookmarksView();
 
 public Q_SLOTS:
+    void clearAllBookmarks();
+    void clearBookmarks(KTextEditor::Document *document);
     void refreshAllBookmarks();
     void refreshBookmarks(KTextEditor::Document *document);
     void jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark);
