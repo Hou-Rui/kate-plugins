@@ -1,1 +1,2 @@
 add_subdirectory(bookmarks_tree)
+add_subdirectory(ripgrep_search)

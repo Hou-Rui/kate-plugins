@@ -6,7 +6,6 @@
 #include <KTextEditor/Document>
 #include <KTextEditor/Plugin>
 #include <KTextEditor/View>
-#include <KToolBar>
 
 class BookmarksTreePlugin : public KTextEditor::Plugin
 {
@@ -21,7 +20,6 @@ class BookmarksTreeView : public QObject
     Q_OBJECT
 public:
     explicit BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::MainWindow *mainWindow);
-    ~BookmarksTreeView();
     
 public Q_SLOTS:
     void clearAllBookmarks();
@@ -42,6 +40,5 @@ private:
     BookmarksTreePlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_toolView = nullptr;
-    KToolBar *m_toolBar = nullptr;
     QTreeWidget *m_treeWidget = nullptr;
 };

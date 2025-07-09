@@ -1,0 +1,20 @@
+{
+    "KPlugin": {
+        "Id": "ripgrep_search",
+        "Name": "Ripgrep Search",
+        "Description": "Search & Replace using Ripgrep.",
+        "Icon": "search",
+        "Version": "1.0",
+        "Category": "Utilities",
+        "Authors": [
+            {
+                "Name": "Hou Rui",
+                "Email": "houruinus@gmail.com"
+            }
+        ],
+        "License": "MIT",
+        "Dependencies": [
+            "ktexteditor"
+        ]
+    }
+}

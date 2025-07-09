@@ -7,7 +7,6 @@
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/View>
-#include <KXMLGUIFactory>
 
 #include <QAction>
 #include <QHeaderView>
