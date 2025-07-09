@@ -1,9 +1,9 @@
 {
     "KPlugin": {
-        "Id": "katebookmarksplugin",
-        "Name": "Bookmarks",
+        "Id": "bookmarks_tree",
+        "Name": "Bookmarks Tree",
         "Description": "Shows and navigates all bookmarks in the current project.",
-        "Icon": "bookmark",
+        "Icon": "bookmarks",
         "Version": "1.0",
         "Category": "Utilities",
         "Authors": [

@@ -1,4 +1,4 @@
-#include "KateBookmarksPlugin.hpp"
+#include "BookmarksTreePlugin.hpp"
 
 #include <KPluginFactory>
 #include <KTextEditor/Application>
@@ -20,19 +20,19 @@
 
 #define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
 
-K_PLUGIN_CLASS_WITH_JSON(KateBookmarksPlugin, "katebookmarksplugin.json")
+K_PLUGIN_CLASS_WITH_JSON(BookmarksTreePlugin, "bookmarks_tree.json")
 
-KateBookmarksPlugin::KateBookmarksPlugin(QObject *parent, const QList<QVariant> &)
+BookmarksTreePlugin::BookmarksTreePlugin(QObject *parent, const QList<QVariant> &)
     : KTextEditor::Plugin(parent)
 {
 }
 
-QObject *KateBookmarksPlugin::createView(KTextEditor::MainWindow *mainWindow)
+QObject *BookmarksTreePlugin::createView(KTextEditor::MainWindow *mainWindow)
 {
-    return new KateBookmarksView(this, mainWindow);
+    return new BookmarksTreeView(this, mainWindow);
 }
 
-void KateBookmarksView::showMessage(const QString &msg)
+void BookmarksTreeView::showMessage(const QString &msg)
 {
     QVariantMap map{{QStringLiteral("category"), QStringLiteral("Bookmarks")},
                     {QStringLiteral("categoryIcon"), THEME_ICON("bookmarks")},
@@ -41,7 +41,7 @@ void KateBookmarksView::showMessage(const QString &msg)
     QMetaObject::invokeMethod(m_mainWindow->parent(), "showMessage", Qt::DirectConnection, Q_ARG(QVariantMap, map));
 }
 
-KateBookmarksView::KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow)
+BookmarksTreeView::BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::MainWindow *mainWindow)
     : QObject(plugin)
     , m_plugin(plugin)
     , m_mainWindow(mainWindow)
@@ -50,9 +50,9 @@ KateBookmarksView::KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::M
     connectSignals();
 }
 
-void KateBookmarksView::setupUi()
+void BookmarksTreeView::setupUi()
 {
-    m_toolView = m_mainWindow->createToolView(m_plugin, "katebookmarksplugin", KTextEditor::MainWindow::Left, THEME_ICON("bookmarks"), tr("Bookmarks"));
+    m_toolView = m_mainWindow->createToolView(m_plugin, "BookmarksTreePlugin", KTextEditor::MainWindow::Left, THEME_ICON("bookmarks"), tr("Bookmarks"));
     m_toolView->setLayout(new QVBoxLayout());
     m_treeWidget = new QTreeWidget(m_toolView);
     m_treeWidget->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
@@ -62,7 +62,7 @@ void KateBookmarksView::setupUi()
     m_toolView->layout()->addWidget(m_treeWidget);
 }
 
-void KateBookmarksView::connectSignals()
+void BookmarksTreeView::connectSignals()
 {
     auto app = KTextEditor::Editor::instance()->application();
     connect(app, &KTextEditor::Application::documentCreated, [this](KTextEditor::Document *document) {
@@ -75,10 +75,10 @@ void KateBookmarksView::connectSignals()
     connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, [this](const QPoint &pos) {
         auto menu = new QMenu(m_treeWidget);
         menu->setAttribute(Qt::WA_DeleteOnClose);
-        auto actionRefresh = menu->addAction(THEME_ICON("view-refresh"), tr("Refresh bookmarks"));
-        auto actionClear = menu->addAction(THEME_ICON("bookmark-remove"), tr("Clear all bookmarks"));
-        connect(actionRefresh, &QAction::triggered, this, &KateBookmarksView::refreshAllBookmarks);
-        connect(actionClear, &QAction::triggered, this, &KateBookmarksView::clearAllBookmarks);
+        auto actionRefresh = menu->addAction(THEME_ICON("view-refresh"), tr("Refresh Bookmarks"));
+        auto actionClear = menu->addAction(THEME_ICON("bookmark-remove"), tr("Clear all Bookmarks"));
+        connect(actionRefresh, &QAction::triggered, this, &BookmarksTreeView::refreshAllBookmarks);
+        connect(actionClear, &QAction::triggered, this, &BookmarksTreeView::clearAllBookmarks);
         menu->popup(m_treeWidget->mapToGlobal(pos));
     });
 
@@ -91,7 +91,7 @@ void KateBookmarksView::connectSignals()
     });
 }
 
-void KateBookmarksView::clearAllBookmarks()
+void BookmarksTreeView::clearAllBookmarks()
 {
     m_treeWidget->clear();
     auto documents = KTextEditor::Editor::instance()->documents();
@@ -100,7 +100,7 @@ void KateBookmarksView::clearAllBookmarks()
     }
 }
 
-void KateBookmarksView::clearBookmarks(KTextEditor::Document *document)
+void BookmarksTreeView::clearBookmarks(KTextEditor::Document *document)
 {
     auto marks = document->marks().values();
     for (auto mark : marks) {
@@ -108,7 +108,7 @@ void KateBookmarksView::clearBookmarks(KTextEditor::Document *document)
     }
 }
 
-void KateBookmarksView::refreshAllBookmarks()
+void BookmarksTreeView::refreshAllBookmarks()
 {
     m_treeWidget->clear();
     auto documents = KTextEditor::Editor::instance()->documents();
@@ -120,7 +120,7 @@ void KateBookmarksView::refreshAllBookmarks()
     }
 }
 
-void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
+void BookmarksTreeView::refreshBookmarks(KTextEditor::Document *document)
 {
     if (!document || !document->url().isValid()) {
         return;
@@ -152,7 +152,7 @@ void KateBookmarksView::refreshBookmarks(KTextEditor::Document *document)
     fileItem->setExpanded(true);
 }
 
-void KateBookmarksView::jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark)
+void BookmarksTreeView::jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark)
 {
     if (!document || !mark) {
         return;
@@ -162,4 +162,4 @@ void KateBookmarksView::jumpToBookmark(KTextEditor::Document *document, KTextEdi
     }
 }
 
-#include "KateBookmarksPlugin.moc"
+#include "BookmarksTreePlugin.moc"

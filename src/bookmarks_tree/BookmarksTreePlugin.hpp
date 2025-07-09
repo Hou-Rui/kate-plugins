@@ -8,20 +8,21 @@
 #include <KTextEditor/View>
 #include <KToolBar>
 
-class KateBookmarksPlugin : public KTextEditor::Plugin
+class BookmarksTreePlugin : public KTextEditor::Plugin
 {
     Q_OBJECT
 public:
-    explicit KateBookmarksPlugin(QObject *parent = nullptr, const QList<QVariant> & = QList<QVariant>());
+    explicit BookmarksTreePlugin(QObject *parent = nullptr, const QList<QVariant> & = QList<QVariant>());
     QObject *createView(KTextEditor::MainWindow *mainWindow) override;
 };
 
-class KateBookmarksView : public QObject
+class BookmarksTreeView : public QObject
 {
     Q_OBJECT
 public:
-    explicit KateBookmarksView(KateBookmarksPlugin *plugin, KTextEditor::MainWindow *mainWindow);
-
+    explicit BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::MainWindow *mainWindow);
+    ~BookmarksTreeView();
+    
 public Q_SLOTS:
     void clearAllBookmarks();
     void clearBookmarks(KTextEditor::Document *document);
@@ -38,7 +39,7 @@ private:
     void setupUi();
     void connectSignals();
 
-    KateBookmarksPlugin *m_plugin = nullptr;
+    BookmarksTreePlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_toolView = nullptr;
     KToolBar *m_toolBar = nullptr;
