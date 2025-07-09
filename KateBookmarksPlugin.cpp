@@ -102,7 +102,7 @@ void KateBookmarksView::clearAllBookmarks()
 
 void KateBookmarksView::clearBookmarks(KTextEditor::Document *document)
 {
-    auto marks = QHash(document->marks());
+    auto marks = document->marks().values();
     for (auto mark : marks) {
         document->clearMark(mark->line);
     }
