@@ -1,5 +1,5 @@
 {
-  "name": "KateBookmarkPlugin",
+  "name": "kate-plugins",
   "files": [
     {
       "git": 1
@@ -7,16 +7,15 @@
   ],
   "exclude_patterns": [ "^po" ],
   "build": {
-    "directory": "build",
     "default_target": "cmake-build",
     "targets": [
       {
         "name": "cmake-init",
-        "build_cmd": "cmake .."
+        "build_cmd": "cmake -B build"
       },
       {
         "name": "cmake-build",
-        "build_cmd": "cmake --build ."
+        "build_cmd": "cmake --build build"
       }
     ]
   }
