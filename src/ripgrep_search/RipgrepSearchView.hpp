@@ -1,10 +1,10 @@
 #pragma once
 
 #include <KTextEditor/MainWindow>
+#include <QAction>
 #include <QLineEdit>
-#include <QPushButton>
-#include <QTreeWidget>
 #include <QProcess>
+#include <QTreeWidget>
 
 class RipgrepSearchPlugin;
 
@@ -17,7 +17,7 @@ public:
 private:
     enum ItemDataRole {
         FileNameRole = Qt::UserRole,
-        LineNumberRole = Qt::UserRole + 1,
+        LineNumberRole
     };
     void showMessage(const QString &msg);
     void setupUi();
@@ -30,7 +30,7 @@ private:
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_content = nullptr;
     QLineEdit *m_searchEdit = nullptr;
-    QPushButton *m_startButton = nullptr;
+    QAction *m_startAction = nullptr;
     QTreeWidget *m_searchResults = nullptr;
     QTreeWidgetItem *m_currentItem = nullptr;
     QProcess *m_rg = nullptr;

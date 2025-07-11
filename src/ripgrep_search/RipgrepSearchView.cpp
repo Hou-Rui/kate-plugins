@@ -13,7 +13,8 @@
 #include <QSizePolicy>
 #include <QVBoxLayout>
 #include <QVariantMap>
-#include <QWidget>
+#include <QToolBar>
+#include <QAction>
 
 #define L(literal) QStringLiteral(literal)
 #define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
@@ -43,22 +44,16 @@ void RipgrepSearchView::setupUi()
 {
     auto toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin",KTextEditor::MainWindow::Left,
                                                  THEME_ICON("search"), tr("Ripgrep Search"));
-    m_content = new QWidget();
-    toolView->layout()->addWidget(m_content);
-    m_content->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-
-    auto layout = new QVBoxLayout();
-    m_content->setLayout(layout);
+    auto toolBar = new QToolBar(toolView);
 
     m_searchEdit = new QLineEdit();
-    layout->addWidget(m_searchEdit);
     m_searchEdit->setPlaceholderText(tr("Search"));
+    toolBar->addWidget(m_searchEdit);
 
-    m_startButton = new QPushButton(THEME_ICON("search"), "Search");
-    layout->addWidget(m_startButton);
+    m_startAction = new QAction(THEME_ICON("search"), "Search");
+    toolBar->addAction(m_startAction);
 
-    m_searchResults = new QTreeWidget();
-    layout->addWidget(m_searchResults);
+    m_searchResults = new QTreeWidget(toolView);
     m_searchResults->setHeaderHidden(true);
     m_searchResults->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
 }
@@ -89,7 +84,10 @@ static inline int jsonLineNumber(const QJsonDocument &json)
 
 void RipgrepSearchView::connectSignals()
 {
-    connect(m_startButton, &QPushButton::clicked, [this] {
+    connect(m_searchEdit, &QLineEdit::editingFinished, [this] {
+        emit m_startAction->triggered();
+    });
+    connect(m_startAction, &QAction::triggered, [this] {
         m_searchResults->clear();
         launchSearch();
     });
