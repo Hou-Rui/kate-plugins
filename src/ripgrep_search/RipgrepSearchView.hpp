@@ -20,7 +20,6 @@ private:
         FileNameRole = Qt::UserRole,
         LineNumberRole
     };
-    void showMessage(const QString &msg);
     void setupUi();
     void connectSignals();
     QString baseDir();

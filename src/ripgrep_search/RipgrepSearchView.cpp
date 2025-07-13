@@ -20,17 +20,6 @@
 #define L(literal) QStringLiteral(literal)
 #define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
 
-void RipgrepSearchView::showMessage(const QString &msg)
-{
-    QVariantMap map {
-        {L("category"), L("Ripgrep Search")},
-        {L("categoryIcon"), THEME_ICON("search")},
-        {L("type"), L("Log")},
-        {L("text"), msg}
-    };
-    QMetaObject::invokeMethod(m_mainWindow->parent(), "showMessage", Qt::DirectConnection, Q_ARG(QVariantMap, map));
-}
-
 RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow)
     : QObject(mainWindow)
     , m_plugin(plugin)
@@ -90,7 +79,7 @@ void RipgrepSearchView::connectSignals()
         m_currentItem->setData(0, FileNameRole, fileName);
         m_currentItem->setData(0, LineNumberRole, 1);
     });
-    
+
     connect(m_rg, &RipgrepCommand::matchFound, [this](RipgrepCommand::Result result) {
         auto resultItem = new QTreeWidgetItem();
         m_currentItem->addChild(resultItem);
