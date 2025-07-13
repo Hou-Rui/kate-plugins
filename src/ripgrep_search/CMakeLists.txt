@@ -4,6 +4,7 @@ kcoreaddons_add_plugin(${plugin_name}
     INSTALL_NAMESPACE "kf6/ktexteditor")
 
 target_sources(${plugin_name} PRIVATE
+    RipgrepCommand.cpp
     RipgrepSearchPlugin.cpp
     RipgrepSearchView.cpp
 )

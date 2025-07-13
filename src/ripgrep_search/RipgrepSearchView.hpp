@@ -7,6 +7,7 @@
 #include <QTreeWidget>
 
 class RipgrepSearchPlugin;
+class RipgrepCommand;
 
 class RipgrepSearchView : public QObject
 {
@@ -22,8 +23,6 @@ private:
     void showMessage(const QString &msg);
     void setupUi();
     void connectSignals();
-    void launchSearch();
-    void processMatch(const QByteArray &match);
     QString baseDir();
 
     RipgrepSearchPlugin *m_plugin = nullptr;
@@ -33,5 +32,5 @@ private:
     QAction *m_startAction = nullptr;
     QTreeWidget *m_searchResults = nullptr;
     QTreeWidgetItem *m_currentItem = nullptr;
-    QProcess *m_rg = nullptr;
+    RipgrepCommand *m_rg = nullptr;
 };
