@@ -1,6 +1,5 @@
 {
     "KPlugin": {
-        "Id": "ripgrep_search",
         "Name": "Ripgrep Search",
         "Description": "Search & Replace using Ripgrep.",
         "Icon": "search",

@@ -1,6 +1,5 @@
 {
     "KPlugin": {
-        "Id": "bookmarks_tree",
         "Name": "Bookmarks Tree",
         "Description": "Shows and navigates all bookmarks in the current project.",
         "Icon": "bookmarks",
