@@ -1,12 +1,11 @@
 #include "RipgrepCommand.hpp"
 
+#include <QException>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
 
 #include <initializer_list>
-#include <optional>
-#include <type_traits>
 
 RipgrepCommand::RipgrepCommand(QObject *parent)
     : QProcess(parent)
@@ -51,55 +50,48 @@ void RipgrepCommand::search(const QString &term)
     start("rg", args, QIODevice::ReadOnly);
 }
 
-static inline auto jsonError()
-{
-    return qFatal() << "JSON Parse Error:";
-}
+struct JsonResolutionError : public QException {
+    QString message;
+    JsonResolutionError(const QString &message)
+        : message(message)
+    {
+    }
+};
 
-template<typename T>
-static std::optional<T> parseJson(const QJsonDocument &json, const std::initializer_list<QString> &args)
+static QJsonValue resolveJson(const QJsonDocument &json, const std::initializer_list<QString> &args)
 {
     Q_ASSERT(args.size() > 0);
     auto obj = json.object();
     for (auto it = args.begin(); it + 1 != args.end(); it++) {
         auto value = obj.value(*it);
         if (value == QJsonValue::Undefined) {
-            jsonError() << *it << "is undefined";
-            return {};
+            throw JsonResolutionError("is undefined");
         }
         obj = value.toObject();
     }
-    auto last = obj.value(args.end()[-1]);
-    if constexpr (std::is_integral_v<T>) {
-        return last.toInt();
-    } else if constexpr (std::is_assignable_v<T, QString>) {
-        return last.toString().trimmed();
-    } else {
-        static_assert(false, "Unsupported JSON type");
-    }
+    return obj.value(args.end()[-1]);
 }
 
 void RipgrepCommand::parseMatch(const QByteArray &match)
 {
     if (match.isEmpty())
         return;
-
-    QJsonParseError err;
-    auto json = QJsonDocument::fromJson(match, &err);
-    if (err.error != QJsonParseError::NoError) {
-        jsonError() << err.errorString();
-        return;
-    }
-
-    auto type = parseJson<QString>(json, {"type"});
-    auto file = parseJson<QString>(json, {"data", "path", "text"});
-    if (*type == "begin") {
-        Q_ASSERT(file);
-        emit matchFoundInFile(*file);
-    } else if (*type == "match") {
-        auto matchedLine = parseJson<QString>(json, {"data", "lines", "text"});
-        auto lineNumber = parseJson<int>(json, {"data", "line_number"});
-        Q_ASSERT(matchedLine && lineNumber);
-        emit matchFound({*file, *lineNumber, *matchedLine});
+    try {
+        QJsonParseError err;
+        auto json = QJsonDocument::fromJson(match, &err);
+        if (err.error != QJsonParseError::NoError)
+            throw JsonResolutionError(err.errorString());
+        auto type = resolveJson(json, {"type"}).toString();
+        if (type == "begin") {
+            auto file = resolveJson(json, {"data", "path", "text"}).toString();
+            emit matchFoundInFile(file);
+        } else if (type == "match") {
+            auto file = resolveJson(json, {"data", "path", "text"}).toString();
+            auto matchedLine = resolveJson(json, {"data", "lines", "text"}).toString().trimmed();
+            auto lineNumber = resolveJson(json, {"data", "line_number"}).toInt();
+            emit matchFound({file, lineNumber, matchedLine});
+        }
+    } catch (JsonResolutionError &err) {
+        qFatal() << "JSON Parse Error:" << err.message;
     }
 }
