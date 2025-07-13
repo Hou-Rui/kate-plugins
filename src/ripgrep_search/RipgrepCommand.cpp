@@ -1,11 +1,14 @@
 #include "RipgrepCommand.hpp"
 
-#include <QProcess>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 
 #include <initializer_list>
+#include <optional>
 #include <type_traits>
+
+#define JSON_PARSE_ERROR qFatal() << "JSON Parse Error:"
 
 RipgrepCommand::RipgrepCommand(QObject *parent)
     : QProcess(parent)
@@ -50,15 +53,17 @@ void RipgrepCommand::search(const QString &term)
     start("rg", args, QIODevice::ReadOnly);
 }
 
-template <typename T>
+template<typename T>
 static std::optional<T> parseJson(const QJsonDocument &json, const std::initializer_list<QString> &args)
 {
     Q_ASSERT(args.size() > 0);
     auto obj = json.object();
     for (auto it = args.begin(); it + 1 != args.end(); it++) {
         auto value = obj.value(*it);
-        if (value == QJsonValue::Undefined)
+        if (value == QJsonValue::Undefined) {
+            JSON_PARSE_ERROR << *it << "is undefined";
             return {};
+        }
         obj = value.toObject();
     }
     auto last = obj.value(args.end()[-1]);
@@ -79,7 +84,7 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
     QJsonParseError err;
     auto json = QJsonDocument::fromJson(match, &err);
     if (err.error != QJsonParseError::NoError) {
-        qFatal() << "JSON parse error:" << err.errorString();
+        JSON_PARSE_ERROR << err.errorString();
         return;
     }
 
