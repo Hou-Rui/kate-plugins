@@ -52,7 +52,6 @@ BookmarksTreeView::BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::M
 void BookmarksTreeView::setupUi()
 {
     m_toolView = m_mainWindow->createToolView(m_plugin, "BookmarksTreePlugin", KTextEditor::MainWindow::Left, THEME_ICON("bookmarks"), tr("Bookmarks"));
-    m_toolView->setLayout(new QVBoxLayout());
     m_treeWidget = new QTreeWidget(m_toolView);
     m_treeWidget->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
