@@ -8,8 +8,6 @@
 #include <optional>
 #include <type_traits>
 
-#define JSON_PARSE_ERROR qFatal() << "JSON Parse Error:"
-
 RipgrepCommand::RipgrepCommand(QObject *parent)
     : QProcess(parent)
 {
@@ -53,7 +51,8 @@ void RipgrepCommand::search(const QString &term)
     start("rg", args, QIODevice::ReadOnly);
 }
 
-static inline auto jsonError() {
+static inline auto jsonError()
+{
     return qFatal() << "JSON Parse Error:";
 }
 
