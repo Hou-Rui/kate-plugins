@@ -5,14 +5,12 @@
 #include <QJsonObject>
 #include <QProcess>
 
-#include <initializer_list>
-
 RipgrepCommand::RipgrepCommand(QObject *parent)
     : QProcess(parent)
 {
     connect(this, &RipgrepCommand::readyReadStandardOutput, [this] {
-        auto lines = readAllStandardOutput().split('\n');
-        for (const auto &line : lines) {
+        while (canReadLine()) {
+            auto line = readLine();
             parseMatch(line.trimmed());
         }
     });
@@ -43,10 +41,9 @@ void RipgrepCommand::search(const QString &term)
 {
     ensureStopped();
     QStringList args;
-    args << "--json" << "-e" << term;
     if (wholeWord())
-        args << "-x";
-    args << workingDirectory();
+        args << "-w";
+    args << "--json" << "-e" << term << workingDirectory();
     start("rg", args, QIODevice::ReadOnly);
 }
 
@@ -58,7 +55,7 @@ struct JsonResolutionError : public QException {
     }
 };
 
-static QJsonValue resolveJson(const QJsonDocument &json, const std::initializer_list<QString> &args)
+static QJsonValue resolveJson(const QJsonDocument &json, const QList<QString> &args)
 {
     Q_ASSERT(args.size() > 0);
     auto obj = json.object();

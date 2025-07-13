@@ -9,18 +9,19 @@ class RipgrepCommand : public QProcess
     Q_PROPERTY(bool wholeWord READ wholeWord WRITE setWholeWord NOTIFY searchOptionsChanged)
 
 public:
-    explicit RipgrepCommand(QObject *parent);
-    ~RipgrepCommand();
-    void search(const QString &term);
-
-    bool wholeWord() const;
-    void setWholeWord(bool newWholeWord);
-
     struct Result {
         QString fileName;
         int lineNumber;
         QString line;
     };
+
+    explicit RipgrepCommand(QObject *parent);
+    ~RipgrepCommand();
+    bool wholeWord() const;
+
+public slots:
+    void search(const QString &term);
+    void setWholeWord(bool newWholeWord);
 
 signals:
     void matchFoundInFile(const QString &path);

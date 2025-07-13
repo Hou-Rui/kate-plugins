@@ -45,10 +45,17 @@ void RipgrepSearchView::setupUi()
 {
     auto toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin", KTextEditor::MainWindow::Left, THEME_ICON("search"), tr("Ripgrep Search"));
     auto toolBar = new QToolBar(toolView);
+    toolBar->layout()->setContentsMargins(0, 0, 0, 0);
+    const int iconSize = toolBar->style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr);
+    toolBar->setIconSize(QSize(iconSize, iconSize));
 
     m_searchEdit = new QLineEdit();
     m_searchEdit->setPlaceholderText(tr("Search"));
     toolBar->addWidget(m_searchEdit);
+
+    m_wholeWordAction = new QAction(THEME_ICON("ime-punctuation-fullwidth"), "Match whole words");
+    m_wholeWordAction->setCheckable(true);
+    toolBar->addAction(m_wholeWordAction);
 
     m_startAction = new QAction(THEME_ICON("search"), "Search");
     toolBar->addAction(m_startAction);
@@ -72,6 +79,8 @@ void RipgrepSearchView::connectSignals()
             m_rg->search(m_searchEdit->text());
         }
     });
+
+    connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
 
     connect(m_rg, &RipgrepCommand::matchFoundInFile, [this](const QString &fileName) {
         m_currentItem = new QTreeWidgetItem();
