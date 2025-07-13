@@ -29,21 +29,41 @@ bool RipgrepCommand::wholeWord() const
 void RipgrepCommand::setWholeWord(bool newValue)
 {
     m_wholeWord = newValue;
+    emit searchOptionsChanged();
+}
+
+bool RipgrepCommand::caseSensitive() const
+{
+    return m_caseSensitive;
+}
+
+void RipgrepCommand::setCaseSensitive(bool newValue)
+{
+    m_caseSensitive = newValue;
+    emit searchOptionsChanged();
 }
 
 void RipgrepCommand::ensureStopped()
 {
-    if (state() != NotRunning)
+    if (state() != NotRunning) {
         kill();
+    }
 }
 
 void RipgrepCommand::search(const QString &term)
 {
     ensureStopped();
     QStringList args;
-    if (wholeWord())
-        args << "-w";
-    args << "--json" << "-e" << term << workingDirectory();
+    if (wholeWord()) {
+        args << "--word-regexp";
+    }
+    if (caseSensitive()) {
+        args << "--case-sensitive";
+    } else {
+        args << "--ignore-case";
+    }
+    args << "--fixed-strings";
+    args << "--json" << "--regexp" << term << workingDirectory();
     start("rg", args, QIODevice::ReadOnly);
 }
 
@@ -61,9 +81,8 @@ static QJsonValue resolveJson(const QJsonDocument &json, const QList<QString> &a
     auto obj = json.object();
     for (auto it = args.begin(); it + 1 != args.end(); it++) {
         auto value = obj.value(*it);
-        if (value == QJsonValue::Undefined) {
-            throw JsonResolutionError("is undefined");
-        }
+        if (value == QJsonValue::Undefined)
+            throw JsonResolutionError(QString("%1 is undefined").arg(*it));
         obj = value.toObject();
     }
     return obj.value(args.end()[-1]);

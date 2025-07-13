@@ -18,10 +18,12 @@ public:
     explicit RipgrepCommand(QObject *parent);
     ~RipgrepCommand();
     bool wholeWord() const;
+    bool caseSensitive() const;
 
 public slots:
     void search(const QString &term);
-    void setWholeWord(bool newWholeWord);
+    void setCaseSensitive(bool newValue);
+    void setWholeWord(bool newValue);
 
 signals:
     void matchFoundInFile(const QString &path);
@@ -38,4 +40,5 @@ private:
     void parseMatch(const QByteArray &match);
 
     bool m_wholeWord = false;
+    bool m_caseSensitive = false;
 };

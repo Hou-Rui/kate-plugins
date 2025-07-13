@@ -30,6 +30,7 @@ private:
     QLineEdit *m_searchEdit = nullptr;
     QAction *m_startAction = nullptr;
     QAction *m_wholeWordAction = nullptr;
+    QAction *m_caseSensitiveAction = nullptr;
     QTreeWidget *m_searchResults = nullptr;
     QTreeWidgetItem *m_currentItem = nullptr;
     RipgrepCommand *m_rg = nullptr;
