@@ -53,6 +53,10 @@ void RipgrepCommand::search(const QString &term)
     start("rg", args, QIODevice::ReadOnly);
 }
 
+static inline auto jsonError() {
+    return qFatal() << "JSON Parse Error:";
+}
+
 template<typename T>
 static std::optional<T> parseJson(const QJsonDocument &json, const std::initializer_list<QString> &args)
 {
@@ -61,7 +65,7 @@ static std::optional<T> parseJson(const QJsonDocument &json, const std::initiali
     for (auto it = args.begin(); it + 1 != args.end(); it++) {
         auto value = obj.value(*it);
         if (value == QJsonValue::Undefined) {
-            JSON_PARSE_ERROR << *it << "is undefined";
+            jsonError() << *it << "is undefined";
             return {};
         }
         obj = value.toObject();
@@ -84,7 +88,7 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
     QJsonParseError err;
     auto json = QJsonDocument::fromJson(match, &err);
     if (err.error != QJsonParseError::NoError) {
-        JSON_PARSE_ERROR << err.errorString();
+        jsonError() << err.errorString();
         return;
     }
 
