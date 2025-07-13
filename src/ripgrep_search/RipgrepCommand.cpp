@@ -45,23 +45,20 @@ void RipgrepCommand::setCaseSensitive(bool newValue)
 
 void RipgrepCommand::ensureStopped()
 {
-    if (state() != NotRunning) {
+    if (state() != NotRunning)
         kill();
-    }
 }
 
 void RipgrepCommand::search(const QString &term)
 {
     ensureStopped();
     QStringList args;
-    if (wholeWord()) {
+    if (wholeWord())
         args << "--word-regexp";
-    }
-    if (caseSensitive()) {
+    if (caseSensitive())
         args << "--case-sensitive";
-    } else {
+    else
         args << "--ignore-case";
-    }
     args << "--fixed-strings";
     args << "--json" << "--regexp" << term << workingDirectory();
     start("rg", args, QIODevice::ReadOnly);
@@ -79,13 +76,15 @@ static QJsonValue resolveJson(const QJsonDocument &json, const QList<QString> &a
 {
     Q_ASSERT(args.size() > 0);
     auto obj = json.object();
-    for (auto it = args.begin(); it + 1 != args.end(); it++) {
-        auto value = obj.value(*it);
+    QJsonValue value;
+    for (auto it = args.begin(); it != args.end(); it++) {
+        value = obj.value(*it);
         if (value == QJsonValue::Undefined)
             throw JsonResolutionError(QString("%1 is undefined").arg(*it));
-        obj = value.toObject();
+        if (it + 1 != args.end())
+            obj = value.toObject();
     }
-    return obj.value(args.end()[-1]);
+    return value;
 }
 
 void RipgrepCommand::parseMatch(const QByteArray &match)
