@@ -43,6 +43,17 @@ void RipgrepCommand::setCaseSensitive(bool newValue)
     emit searchOptionsChanged();
 }
 
+bool RipgrepCommand::useRegex() const
+{
+    return m_useRegex;
+}
+
+void RipgrepCommand::setUseRegex(bool newValue)
+{
+    m_useRegex = newValue;
+    emit searchOptionsChanged();
+}
+
 void RipgrepCommand::ensureStopped()
 {
     if (state() != NotRunning)
@@ -53,13 +64,18 @@ void RipgrepCommand::search(const QString &term)
 {
     ensureStopped();
     QStringList args;
+
     if (wholeWord())
         args << "--word-regexp";
+
     if (caseSensitive())
         args << "--case-sensitive";
     else
         args << "--ignore-case";
-    args << "--fixed-strings";
+
+    if (!useRegex())
+        args << "--fixed-strings";
+
     args << "--json" << "--regexp" << term << workingDirectory();
     start("rg", args, QIODevice::ReadOnly);
 }

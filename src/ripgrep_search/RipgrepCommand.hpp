@@ -7,6 +7,8 @@ class RipgrepCommand : public QProcess
 {
     Q_OBJECT
     Q_PROPERTY(bool wholeWord READ wholeWord WRITE setWholeWord NOTIFY searchOptionsChanged)
+    Q_PROPERTY(bool caseSensitive READ caseSensitive WRITE setCaseSensitive NOTIFY searchOptionsChanged)
+    Q_PROPERTY(bool useRegex READ useRegex WRITE setUseRegex NOTIFY searchOptionsChanged)
 
 public:
     struct Result {
@@ -19,11 +21,13 @@ public:
     ~RipgrepCommand();
     bool wholeWord() const;
     bool caseSensitive() const;
+    bool useRegex() const;
 
 public slots:
     void search(const QString &term);
     void setCaseSensitive(bool newValue);
     void setWholeWord(bool newValue);
+    void setUseRegex(bool newValue);
 
 signals:
     void matchFoundInFile(const QString &path);
@@ -41,4 +45,5 @@ private:
 
     bool m_wholeWord = false;
     bool m_caseSensitive = false;
+    bool m_useRegex = false;
 };

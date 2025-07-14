@@ -31,6 +31,7 @@ private:
     QAction *m_startAction = nullptr;
     QAction *m_wholeWordAction = nullptr;
     QAction *m_caseSensitiveAction = nullptr;
+    QAction *m_useRegexAction = nullptr;
     QTreeWidget *m_searchResults = nullptr;
     QTreeWidgetItem *m_currentItem = nullptr;
     RipgrepCommand *m_rg = nullptr;

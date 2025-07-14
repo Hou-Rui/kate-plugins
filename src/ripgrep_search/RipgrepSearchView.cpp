@@ -42,13 +42,17 @@ void RipgrepSearchView::setupUi()
     m_searchEdit->setPlaceholderText(tr("Search"));
     toolBar->addWidget(m_searchEdit);
 
-    m_wholeWordAction = new QAction(THEME_ICON("ime-punctuation-fullwidth"), "Match whole words");
+    m_wholeWordAction = new QAction(THEME_ICON("ime-punctuation-fullwidth"), tr("Match whole words"));
     m_wholeWordAction->setCheckable(true);
     toolBar->addAction(m_wholeWordAction);
-    
-    m_caseSensitiveAction = new QAction(THEME_ICON("format-text-subscript"), "Case sensitive");
+
+    m_caseSensitiveAction = new QAction(THEME_ICON("format-text-subscript"), tr("Case sensitive"));
     m_caseSensitiveAction->setCheckable(true);
     toolBar->addAction(m_caseSensitiveAction);
+
+    m_useRegexAction = new QAction(THEME_ICON("code-context"), tr("Use regular expression"));
+    m_useRegexAction->setCheckable(true);
+    toolBar->addAction(m_useRegexAction);
 
     m_startAction = new QAction(THEME_ICON("search"), "Search");
     toolBar->addAction(m_startAction);
@@ -75,6 +79,7 @@ void RipgrepSearchView::connectSignals()
 
     connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
     connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
+    connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
 
     connect(m_rg, &RipgrepCommand::matchFoundInFile, [this](const QString &fileName) {
         m_currentItem = new QTreeWidgetItem();
