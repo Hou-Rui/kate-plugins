@@ -98,7 +98,7 @@ static QJsonValue resolveJson(const QJsonObject &root, const QList<QString> &arg
     for (const auto &key : args) {
         value = obj.value(key);
         if (value == QJsonValue::Undefined)
-            throw JsonResolutionError(QString("%1 is undefined").arg(key));
+            throw JsonResolutionError(QStringLiteral("%1 is undefined").arg(key));
         if (&key != &args.back())
             obj = value.toObject();
     }

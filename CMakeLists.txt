@@ -19,7 +19,7 @@ include(ECMAddAppIcon)
 include(ECMInstallIcons)
 include(ECMDeprecationSettings)
 
-find_package(KF6 REQUIRED COMPONENTS TextEditor I18n)
+find_package(KF6 REQUIRED COMPONENTS TextEditor KIO I18n)
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
 add_subdirectory(src)

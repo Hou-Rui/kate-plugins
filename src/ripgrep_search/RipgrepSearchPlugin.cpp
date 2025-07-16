@@ -1,6 +1,7 @@
 #include "RipgrepSearchPlugin.hpp"
 #include "RipgrepCommand.hpp"
 
+#include <KFileItem>
 #include <KPluginFactory>
 #include <KTextEditor/Document>
 #include <KTextEditor/Editor>
@@ -94,12 +95,19 @@ static QString renderSearchResult(const RipgrepCommand::Result &result)
         // clang-format off
         builder << result.line.sliced(mark, start - mark).toHtmlEscaped()
                 << "<span style=\"background-color: " << highlight << "; color: " << color << "\">"
-                << result.line.sliced(start, end - start).toHtmlEscaped() << "</span>";
+                << result.line.sliced(start, end - start).toHtmlEscaped()
+                << "</span>";
         // clang-format on
         mark = end;
     }
     builder << result.line.sliced(mark).toHtmlEscaped();
-    return output;
+    return output.trimmed();
+}
+
+static inline QIcon iconForFile(const QString &filePath)
+{
+    KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);
+    return QIcon::fromTheme(item.iconName());
 }
 
 void RipgrepSearchView::connectSignals()
@@ -119,7 +127,7 @@ void RipgrepSearchView::connectSignals()
     connect(m_rg, &RipgrepCommand::matchFoundInFile, [this](const QString &fileName) {
         m_currentItem = new QTreeWidgetItem();
         m_searchResults->addTopLevelItem(m_currentItem);
-        m_currentItem->setIcon(0, THEME_ICON("document-multiple"));
+        m_currentItem->setIcon(0, iconForFile(fileName));
         m_currentItem->setText(0, QFileInfo(fileName).fileName());
         m_currentItem->setData(0, FileNameRole, fileName);
         m_currentItem->setData(0, LineNumberRole, 1);
@@ -150,7 +158,7 @@ void RipgrepSearchView::connectSignals()
 
 QString RipgrepSearchView::projectBaseDir()
 {
-    if (auto projectPlugin = m_mainWindow->pluginView(L("kateprojectplugin"))) {
+    if (auto projectPlugin = m_mainWindow->pluginView("kateprojectplugin")) {
         return projectPlugin->property("projectBaseDir").toString();
     }
     return QString();

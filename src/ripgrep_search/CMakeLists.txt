@@ -9,6 +9,7 @@ target_sources(${plugin_name} PRIVATE
 )
 
 target_link_libraries(${plugin_name}
+    KF6::KIOWidgets
     KF6::TextEditor
     Qt6::Core
     Qt6::Widgets
