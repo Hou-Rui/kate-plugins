@@ -1,6 +1,7 @@
 #include "RipgrepCommand.hpp"
 
 #include <QException>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -88,16 +89,16 @@ struct JsonResolutionError : public QException {
     }
 };
 
-static QJsonValue resolveJson(const QJsonDocument &json, const QList<QString> &args)
+static QJsonValue resolveJson(const QJsonObject &root, const QList<QString> &args)
 {
     Q_ASSERT(args.size() > 0);
-    auto obj = json.object();
+    QJsonObject obj = root;
     QJsonValue value;
-    for (auto it = args.begin(); it != args.end(); it++) {
-        value = obj.value(*it);
+    for (const auto &key : args) {
+        value = obj.value(key);
         if (value == QJsonValue::Undefined)
-            throw JsonResolutionError(QString("%1 is undefined").arg(*it));
-        if (it + 1 != args.end())
+            throw JsonResolutionError(QString("%1 is undefined").arg(key));
+        if (&key != &args.back())
             obj = value.toObject();
     }
     return value;
@@ -112,15 +113,24 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
         auto json = QJsonDocument::fromJson(match, &err);
         if (err.error != QJsonParseError::NoError)
             throw JsonResolutionError(err.errorString());
-        auto type = resolveJson(json, {"type"}).toString();
+        auto root = json.object();
+        auto type = resolveJson(root, {"type"}).toString();
         if (type == "begin") {
-            auto file = resolveJson(json, {"data", "path", "text"}).toString();
+            auto file = resolveJson(root, {"data", "path", "text"}).toString();
             emit matchFoundInFile(file);
         } else if (type == "match") {
-            auto file = resolveJson(json, {"data", "path", "text"}).toString();
-            auto matchedLine = resolveJson(json, {"data", "lines", "text"}).toString().trimmed();
-            auto lineNumber = resolveJson(json, {"data", "line_number"}).toInt();
-            emit matchFound({file, lineNumber, matchedLine});
+            Result result;
+            result.fileName = resolveJson(root, {"data", "path", "text"}).toString();
+            result.line = resolveJson(root, {"data", "lines", "text"}).toString();
+            result.lineNumber = resolveJson(root, {"data", "line_number"}).toInt();
+            auto submatches = resolveJson(root, {"data", "submatches"}).toArray();
+            for (auto v : submatches) {
+                auto obj = v.toObject();
+                int start = resolveJson(obj, {"start"}).toInt();
+                int end = resolveJson(obj, {"end"}).toInt();
+                result.submatches.append({start, end});
+            }
+            emit matchFound(result);
         }
     } catch (JsonResolutionError &err) {
         qFatal() << "JSON Parse Error:" << err.message;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <KTextEditor/MainWindow>
+
 #include <QAction>
 #include <QLineEdit>
 #include <QProcess>

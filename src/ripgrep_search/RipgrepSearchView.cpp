@@ -7,6 +7,7 @@
 #include <KTextEditor/View>
 
 #include <QAction>
+#include <QApplication>
 #include <QByteArray>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -15,6 +16,7 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QSizePolicy>
+#include <QTextStream>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVariantMap>
@@ -71,7 +73,27 @@ void RipgrepSearchView::setupUi()
 
     m_searchResults = new QTreeWidget(toolView);
     m_searchResults->setHeaderHidden(true);
+    m_searchResults->setAnimated(true);
     m_searchResults->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+}
+
+static QString renderSearchResult(const RipgrepCommand::Result &result)
+{
+    QString output;
+    QTextStream builder(&output);
+    int mark = 0;
+    for (auto [start, end] : result.submatches) {
+        auto palette = QApplication::palette();
+        auto highlight = palette.highlight().color().name();
+        auto color = palette.highlightedText().color().name();
+        builder << result.line.sliced(mark, start - mark).toHtmlEscaped()
+                << "<span style=\"background-color: " << highlight << "; color: " << color << "\">"
+                << result.line.sliced(start, end - start).toHtmlEscaped()
+                << "</span>";
+        mark = end;
+    }
+    builder << result.line.sliced(mark).toHtmlEscaped();
+    return output;
 }
 
 void RipgrepSearchView::connectSignals()
@@ -99,9 +121,10 @@ void RipgrepSearchView::connectSignals()
     connect(m_rg, &RipgrepCommand::matchFound, [this](RipgrepCommand::Result result) {
         auto resultItem = new QTreeWidgetItem();
         m_currentItem->addChild(resultItem);
-        resultItem->setText(0, L("%1: %2").arg(result.lineNumber).arg(result.line));
         resultItem->setData(0, FileNameRole, result.fileName);
         resultItem->setData(0, LineNumberRole, result.lineNumber);
+        auto resultWidget = new QLabel(renderSearchResult(result));
+        m_searchResults->setItemWidget(resultItem, 0, resultWidget);
     });
 
     connect(m_searchResults, &QTreeWidget::itemDoubleClicked, [this](QTreeWidgetItem *item, auto) {

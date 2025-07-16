@@ -12,9 +12,14 @@ class RipgrepCommand : public QProcess
 
 public:
     struct Result {
+        struct Submatch {
+            int start;
+            int end;
+        };
         QString fileName;
         int lineNumber;
         QString line;
+        QList<Submatch> submatches;
     };
 
     explicit RipgrepCommand(QObject *parent);
