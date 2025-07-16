@@ -6,7 +6,6 @@ kcoreaddons_add_plugin(${plugin_name}
 target_sources(${plugin_name} PRIVATE
     RipgrepCommand.cpp
     RipgrepSearchPlugin.cpp
-    RipgrepSearchView.cpp
 )
 
 target_link_libraries(${plugin_name}

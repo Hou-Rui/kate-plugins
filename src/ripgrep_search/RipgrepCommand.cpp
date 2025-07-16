@@ -134,6 +134,6 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
             emit matchFound(result);
         }
     } catch (JsonResolutionError &err) {
-        qFatal() << "JSON Parse Error:" << err.message;
+        qWarning() << "JSON Parse Error:" << err.message;
     }
 }
