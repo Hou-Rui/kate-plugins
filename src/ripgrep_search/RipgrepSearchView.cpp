@@ -116,6 +116,7 @@ void RipgrepSearchView::connectSignals()
         m_currentItem->setText(0, QFileInfo(fileName).fileName());
         m_currentItem->setData(0, FileNameRole, fileName);
         m_currentItem->setData(0, LineNumberRole, 1);
+        m_currentItem->setData(0, ColumnRole, 0);
     });
 
     connect(m_rg, &RipgrepCommand::matchFound, [this](RipgrepCommand::Result result) {
@@ -123,6 +124,8 @@ void RipgrepSearchView::connectSignals()
         m_currentItem->addChild(resultItem);
         resultItem->setData(0, FileNameRole, result.fileName);
         resultItem->setData(0, LineNumberRole, result.lineNumber);
+        int column = result.submatches.isEmpty() ? 0 : result.submatches.front().start;
+        resultItem->setData(0, ColumnRole, column);
         auto resultWidget = new QLabel(renderSearchResult(result));
         m_searchResults->setItemWidget(resultItem, 0, resultWidget);
     });
@@ -130,9 +133,10 @@ void RipgrepSearchView::connectSignals()
     connect(m_searchResults, &QTreeWidget::itemDoubleClicked, [this](QTreeWidgetItem *item, auto) {
         auto fileName = item->data(0, FileNameRole).toString();
         auto lineNumber = item->data(0, LineNumberRole).toInt();
+        auto column = item->data(0, ColumnRole).toInt();
         auto editor = KTextEditor::Editor::instance();
         if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(fileName))) {
-            view->setCursorPosition(KTextEditor::Cursor(lineNumber - 1, 0));
+            view->setCursorPosition(KTextEditor::Cursor(lineNumber - 1, column));
         }
     });
 }

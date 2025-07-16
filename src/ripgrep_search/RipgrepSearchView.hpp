@@ -24,7 +24,8 @@ private slots:
 private:
     enum ItemDataRole {
         FileNameRole = Qt::UserRole,
-        LineNumberRole
+        LineNumberRole,
+        ColumnRole,
     };
 
     RipgrepSearchPlugin *m_plugin = nullptr;
