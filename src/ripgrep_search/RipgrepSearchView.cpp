@@ -104,6 +104,7 @@ void RipgrepSearchView::connectSignals()
 
     connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
     connect(m_searchEdit, &QLineEdit::editingFinished, this, &RipgrepSearchView::startSearch);
+    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
     connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
     connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);

@@ -22,36 +22,21 @@ RipgrepCommand::~RipgrepCommand()
     ensureStopped();
 }
 
-bool RipgrepCommand::wholeWord() const
-{
-    return m_wholeWord;
-}
-
 void RipgrepCommand::setWholeWord(bool newValue)
 {
-    m_wholeWord = newValue;
+    m_options.wholeWord = newValue;
     emit searchOptionsChanged();
-}
-
-bool RipgrepCommand::caseSensitive() const
-{
-    return m_caseSensitive;
 }
 
 void RipgrepCommand::setCaseSensitive(bool newValue)
 {
-    m_caseSensitive = newValue;
+    m_options.caseSensitive = newValue;
     emit searchOptionsChanged();
-}
-
-bool RipgrepCommand::useRegex() const
-{
-    return m_useRegex;
 }
 
 void RipgrepCommand::setUseRegex(bool newValue)
 {
-    m_useRegex = newValue;
+    m_options.useRegex = newValue;
     emit searchOptionsChanged();
 }
 
@@ -64,16 +49,16 @@ void RipgrepCommand::ensureStopped()
 void RipgrepCommand::search(const QString &term, const QString &dir, const QList<QString> &files)
 {
     QStringList args;
-    if (wholeWord())
+    if (m_options.wholeWord)
         args << "--word-regexp";
-    if (caseSensitive())
+    if (m_options.caseSensitive)
         args << "--case-sensitive";
     else
         args << "--ignore-case";
-    if (!useRegex())
+    if (!m_options.useRegex)
         args << "--fixed-strings";
     args << "--json" << "--regexp" << term;
-    
+
     if (!dir.isEmpty()) {
         args << dir;
     } else if (!files.isEmpty()) {
@@ -82,7 +67,7 @@ void RipgrepCommand::search(const QString &term, const QString &dir, const QList
     } else {
         return;
     }
-    
+
     ensureStopped();
     start("rg", args, QIODevice::ReadOnly);
 }
