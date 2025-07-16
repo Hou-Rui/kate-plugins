@@ -28,6 +28,9 @@ private:
         ColumnRole,
     };
 
+    QString projectBaseDir();
+    QList<QString> openedFiles();
+
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_content = nullptr;

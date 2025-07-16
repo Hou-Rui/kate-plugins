@@ -61,24 +61,40 @@ void RipgrepCommand::ensureStopped()
         kill();
 }
 
-void RipgrepCommand::search(const QString &term)
+void RipgrepCommand::search(const QString &term, const QString &dir, const QList<QString> &files)
 {
-    ensureStopped();
     QStringList args;
-
     if (wholeWord())
         args << "--word-regexp";
-
     if (caseSensitive())
         args << "--case-sensitive";
     else
         args << "--ignore-case";
-
     if (!useRegex())
         args << "--fixed-strings";
-
-    args << "--json" << "--regexp" << term << workingDirectory();
+    args << "--json" << "--regexp" << term;
+    
+    if (!dir.isEmpty()) {
+        args << dir;
+    } else if (!files.isEmpty()) {
+        for (const auto &file : files)
+            args << file;
+    } else {
+        return;
+    }
+    
+    ensureStopped();
     start("rg", args, QIODevice::ReadOnly);
+}
+
+void RipgrepCommand::searchInDir(const QString &term, const QString &dir)
+{
+    search(term, dir, {});
+}
+
+void RipgrepCommand::searchInFiles(const QString &term, const QList<QString> &files)
+{
+    search(term, QString(), files);
 }
 
 struct JsonResolutionError : public QException {

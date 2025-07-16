@@ -29,7 +29,8 @@ public:
     bool useRegex() const;
 
 public slots:
-    void search(const QString &term);
+    void searchInDir(const QString &term, const QString &dir);
+    void searchInFiles(const QString &term, const QList<QString> &files);
     void setCaseSensitive(bool newValue);
     void setWholeWord(bool newValue);
     void setUseRegex(bool newValue);
@@ -47,6 +48,7 @@ private:
 
     void ensureStopped();
     void parseMatch(const QByteArray &match);
+    void search(const QString &term, const QString &dir, const QList<QString> &files);
 
     bool m_wholeWord = false;
     bool m_caseSensitive = false;

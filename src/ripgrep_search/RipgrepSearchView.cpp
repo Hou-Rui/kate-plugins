@@ -2,6 +2,7 @@
 #include "RipgrepCommand.hpp"
 #include "RipgrepSearchPlugin.hpp"
 
+#include <KTextEditor/Document>
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/View>
@@ -86,10 +87,8 @@ static QString renderSearchResult(const RipgrepCommand::Result &result)
         auto palette = QApplication::palette();
         auto highlight = palette.highlight().color().name();
         auto color = palette.highlightedText().color().name();
-        builder << result.line.sliced(mark, start - mark).toHtmlEscaped()
-                << "<span style=\"background-color: " << highlight << "; color: " << color << "\">"
-                << result.line.sliced(start, end - start).toHtmlEscaped()
-                << "</span>";
+        builder << result.line.sliced(mark, start - mark).toHtmlEscaped() << "<span style=\"background-color: " << highlight << "; color: " << color << "\">"
+                << result.line.sliced(start, end - start).toHtmlEscaped() << "</span>";
         mark = end;
     }
     builder << result.line.sliced(mark).toHtmlEscaped();
@@ -141,25 +140,40 @@ void RipgrepSearchView::connectSignals()
     });
 }
 
+QString RipgrepSearchView::projectBaseDir()
+{
+    if (auto projectPlugin = m_mainWindow->pluginView(L("kateprojectplugin"))) {
+        return projectPlugin->property("projectBaseDir").toString();
+    }
+    return QString();
+}
+
+QList<QString> RipgrepSearchView::openedFiles()
+{
+    QList<QString> result;
+    auto editor = KTextEditor::Editor::instance();
+    for (auto doc : editor->documents()) {
+        if (doc->url().isLocalFile()) {
+            auto fileName = doc->url().toLocalFile();
+            if (QFileInfo::exists(fileName))
+                result.append(fileName);
+        }
+    }
+    return result;
+}
+
 void RipgrepSearchView::startSearch()
 {
     auto term = m_searchEdit->text();
     if (term.isEmpty())
         return;
 
-    auto projectPlugin = m_mainWindow->pluginView(L("kateprojectplugin"));
-    if (!projectPlugin) {
-        qFatal() << "No project plugin found. Do not perform searching";
-        return;
-    }
-
-    auto cwd = projectPlugin->property("projectBaseDir").toString();
-    if (cwd.isEmpty()) {
-        qFatal() << "Empty base directory. Do not perform searching";
-        return;
-    }
-
     m_searchResults->clear();
-    m_rg->setWorkingDirectory(cwd);
-    m_rg->search(term);
+    if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
+        m_rg->searchInDir(term, baseDir);
+    } else if (auto files = openedFiles(); !files.isEmpty()) {
+        m_rg->searchInFiles(term, files);
+    } else {
+        qInfo() << "No opened documents, not performing searching.";
+    }
 }
