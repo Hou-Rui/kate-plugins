@@ -6,6 +6,7 @@
 #include <KTextEditor/Document>
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
+#include <KTextEditor/Range>
 #include <KTextEditor/View>
 
 #include <QAction>
@@ -130,8 +131,6 @@ void RipgrepSearchView::connectSignals()
         m_currentItem->setIcon(0, iconForFile(fileName));
         m_currentItem->setText(0, QFileInfo(fileName).fileName());
         m_currentItem->setData(0, FileNameRole, fileName);
-        m_currentItem->setData(0, LineNumberRole, 1);
-        m_currentItem->setData(0, ColumnRole, 0);
     });
 
     connect(m_rg, &RipgrepCommand::matchFound, [this](RipgrepCommand::Result result) {
@@ -139,19 +138,25 @@ void RipgrepSearchView::connectSignals()
         m_currentItem->addChild(resultItem);
         resultItem->setData(0, FileNameRole, result.fileName);
         resultItem->setData(0, LineNumberRole, result.lineNumber);
-        int column = result.submatches.isEmpty() ? 0 : result.submatches.front().start;
-        resultItem->setData(0, ColumnRole, column);
+        if (!result.submatches.isEmpty()) {
+            const auto &[start, end] = result.submatches.front();
+            resultItem->setData(0, StartColumnRole, start);
+            resultItem->setData(0, EndColumnRole, end);
+        }
         auto resultWidget = new QLabel(renderSearchResult(result));
         m_searchResults->setItemWidget(resultItem, 0, resultWidget);
     });
 
-    connect(m_searchResults, &QTreeWidget::itemDoubleClicked, [this](QTreeWidgetItem *item, auto) {
+    connect(m_searchResults, &QTreeWidget::itemClicked, [this](QTreeWidgetItem *item, auto) {
         auto fileName = item->data(0, FileNameRole).toString();
-        auto lineNumber = item->data(0, LineNumberRole).toInt();
-        auto column = item->data(0, ColumnRole).toInt();
-        auto editor = KTextEditor::Editor::instance();
         if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(fileName))) {
-            view->setCursorPosition(KTextEditor::Cursor(lineNumber - 1, column));
+            if (auto lineRole = item->data(0, LineNumberRole); lineRole.isValid()) {
+                auto line = lineRole.toInt() - 1;
+                auto start = item->data(0, StartColumnRole).toInt();
+                auto end = item->data(0, EndColumnRole).toInt();
+                view->setCursorPosition(KTextEditor::Cursor(line, start));
+                view->setSelection(KTextEditor::Range(line, start, line, end));
+            }
         }
     });
 }

@@ -26,7 +26,8 @@ private:
     enum ItemDataRole {
         FileNameRole = Qt::UserRole,
         LineNumberRole,
-        ColumnRole,
+        StartColumnRole,
+        EndColumnRole,
     };
 
     QString projectBaseDir();
