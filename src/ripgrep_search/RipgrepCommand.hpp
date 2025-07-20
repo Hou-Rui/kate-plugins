@@ -7,17 +7,6 @@ class RipgrepCommand : public QProcess
 {
     Q_OBJECT
 public:
-    struct Result {
-        struct Submatch {
-            int start;
-            int end;
-        };
-        QString fileName;
-        int lineNumber;
-        QString line;
-        QList<Submatch> submatches;
-    };
-
     explicit RipgrepCommand(QObject *parent);
     ~RipgrepCommand();
 
@@ -30,8 +19,8 @@ public slots:
     void setUseRegex(bool newValue);
 
 signals:
-    void matchFoundInFile(const QString &path);
-    void matchFound(Result result);
+    void matchFoundInFile(const QString &file);
+    void matchFound(const QString &file, int line, int start, int end);
     void searchOptionsChanged();
 
 private:

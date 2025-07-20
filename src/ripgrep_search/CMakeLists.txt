@@ -6,11 +6,11 @@ kcoreaddons_add_plugin(${plugin_name}
 target_sources(${plugin_name} PRIVATE
     RipgrepCommand.cpp
     RipgrepSearchPlugin.cpp
+    SearchResultsView.cpp
 )
 
 target_link_libraries(${plugin_name}
     KF6::KIOCore
     KF6::TextEditor
-    Qt6::Core
     Qt6::Widgets
 )

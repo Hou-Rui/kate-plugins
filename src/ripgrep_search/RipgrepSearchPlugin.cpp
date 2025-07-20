@@ -1,5 +1,6 @@
 #include "RipgrepSearchPlugin.hpp"
 #include "RipgrepCommand.hpp"
+#include "SearchResultsView.hpp"
 
 #include <KFileItem>
 #include <KPluginFactory>
@@ -19,6 +20,7 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QSizePolicy>
+#include <QStyledItemDelegate>
 #include <QTextStream>
 #include <QToolBar>
 #include <QVBoxLayout>
@@ -79,30 +81,10 @@ void RipgrepSearchView::setupUi()
     m_useRegexAction->setCheckable(true);
     searchBar->addAction(m_useRegexAction);
 
-    m_searchResults = new QTreeWidget(toolView);
-    m_searchResults->setHeaderHidden(true);
-    m_searchResults->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-}
-
-static QString renderSearchResult(const RipgrepCommand::Result &result)
-{
-    QString output;
-    QTextStream builder(&output);
-    int mark = 0;
-    for (const auto &[start, end] : result.submatches) {
-        auto palette = QApplication::palette();
-        auto highlight = palette.highlight().color().name();
-        auto color = palette.highlightedText().color().name();
-        // clang-format off
-        builder << result.line.sliced(mark, start - mark).toHtmlEscaped()
-                << "<span style=\"background-color: " << highlight << "; color: " << color << "\">"
-                << result.line.sliced(start, end - start).toHtmlEscaped()
-                << "</span>";
-        // clang-format on
-        mark = end;
-    }
-    builder << result.line.sliced(mark).toHtmlEscaped();
-    return output.trimmed();
+    auto resultsView = new SearchResultsView(toolView);
+    resultsView->setHeaderHidden(true);
+    resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    m_resultsModel = resultsView->model();
 }
 
 static inline QIcon iconForFile(const QString &filePath)
@@ -115,7 +97,7 @@ void RipgrepSearchView::connectSignals()
 {
     connect(m_clearAction, &QAction::triggered, [this] {
         m_searchEdit->clear();
-        m_searchResults->clear();
+        m_resultsModel->clear();
     });
 
     connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);

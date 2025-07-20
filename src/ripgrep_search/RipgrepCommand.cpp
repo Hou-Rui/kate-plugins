@@ -120,18 +120,15 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
             auto file = resolveJson(root, {"data", "path", "text"}).toString();
             emit matchFoundInFile(file);
         } else if (type == "match") {
-            Result result;
-            result.fileName = resolveJson(root, {"data", "path", "text"}).toString();
-            result.line = resolveJson(root, {"data", "lines", "text"}).toString();
-            result.lineNumber = resolveJson(root, {"data", "line_number"}).toInt();
+            auto file = resolveJson(root, {"data", "path", "text"}).toString();
+            auto line = resolveJson(root, {"data", "line_number"}).toInt();
             auto submatches = resolveJson(root, {"data", "submatches"}).toArray();
             for (auto v : submatches) {
                 auto obj = v.toObject();
                 int start = resolveJson(obj, {"start"}).toInt();
                 int end = resolveJson(obj, {"end"}).toInt();
-                result.submatches.append({start, end});
+                emit matchFound(file, line, start, end);
             }
-            emit matchFound(result);
         }
     } catch (JsonResolutionError &err) {
         qWarning() << "JSON Parse Error:" << err.message;

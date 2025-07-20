@@ -6,10 +6,12 @@
 #include <QAction>
 #include <QLineEdit>
 #include <QProcess>
-#include <QTreeWidget>
+#include <QStandardItemModel>
+#include <QTreeView>
 
 class RipgrepCommand;
 class RipgrepSearchPlugin;
+class SearchResultsModel;
 
 class RipgrepSearchView : public QObject
 {
@@ -23,13 +25,6 @@ private slots:
     void startSearch();
 
 private:
-    enum ItemDataRole {
-        FileNameRole = Qt::UserRole,
-        LineNumberRole,
-        StartColumnRole,
-        EndColumnRole,
-    };
-
     QString projectBaseDir();
     QList<QString> openedFiles();
 
@@ -42,8 +37,7 @@ private:
     QAction *m_wholeWordAction = nullptr;
     QAction *m_caseSensitiveAction = nullptr;
     QAction *m_useRegexAction = nullptr;
-    QTreeWidget *m_searchResults = nullptr;
-    QTreeWidgetItem *m_currentItem = nullptr;
+    SearchResultsModel *m_resultsModel = nullptr;
     RipgrepCommand *m_rg = nullptr;
 };
 
