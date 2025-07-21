@@ -104,6 +104,9 @@ void RipgrepSearchView::connectSignals()
     connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
     connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
 
+    connect(m_resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
+        m_mainWindow->openUrl(QUrl::fromLocalFile(file));
+    });
     connect(m_resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
         if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(file)); line != -1) {
             line--;

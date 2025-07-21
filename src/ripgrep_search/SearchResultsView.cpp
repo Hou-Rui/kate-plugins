@@ -29,7 +29,8 @@ public:
 static std::pair<int, QString> trimLeft(const QString &str)
 {
     int start = 0;
-    while (str[start].isSpace()) start++;
+    while (str[start].isSpace())
+        start++;
     return {start, str.trimmed()};
 }
 
@@ -44,9 +45,8 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 
     auto icon = index.data(Qt::DecorationRole).value<QIcon>();
     auto iconRect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &opt, opt.widget);
-    if (!icon.isNull()) {
+    if (!icon.isNull())
         icon.paint(painter, iconRect, Qt::AlignCenter);
-    }
 
     const auto &[trimmed, text] = trimLeft(index.data(Qt::DisplayRole).toString());
     int highlightStart = index.data(StartColumnRole).toInt() - trimmed;
@@ -64,9 +64,8 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
         if (highlightStart > 0)
             formats.append({0, highlightStart, normal});
         formats.append({highlightStart, highlightEnd - highlightStart, highlight});
-        if (highlightEnd < text.length()) {
+        if (highlightEnd < text.length())
             formats.append({highlightEnd, static_cast<int>(text.length() - highlightEnd), normal});
-        }
     }
 
     layout.setFormats(formats);
@@ -77,7 +76,7 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     line.setLineWidth(opt.rect.width());
 
     QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
-    int x = iconRect.right() + 4; // some spacing
+    int x = iconRect.right() + style->pixelMetric(QStyle::PM_LineEditIconMargin);
     int y = opt.rect.top() + (opt.rect.height() - line.height()) / 2;
     layout.draw(painter, QPointF(x, y));
 
@@ -107,16 +106,19 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     auto index = indexAt(event->pos());
     if (!index.isValid())
         return;
-    
-    if (index.parent() == rootIndex()) {
+
+    if (index.parent() == rootIndex())
         expand(index);
-    }
-    
+
     auto file = index.data(FileNameRole).toString();
-    auto line = index.data(LineNumberRole).toInt();
-    auto start = index.data(StartColumnRole).toInt();
-    auto end = index.data(EndColumnRole).toInt();
-    emit jumpToResult(file, line, start, end);
+    if (auto lineRole = index.data(LineNumberRole); lineRole.isValid()) {
+        auto line = lineRole.toInt();
+        auto start = index.data(StartColumnRole).toInt();
+        auto end = index.data(EndColumnRole).toInt();
+        emit jumpToResult(file, line, start, end);
+    } else {
+        emit jumpToFile(file);
+    }
 }
 
 static inline QIcon iconForFile(const QString &filePath)
@@ -125,28 +127,22 @@ static inline QIcon iconForFile(const QString &filePath)
     return QIcon::fromTheme(item.iconName());
 }
 
-static inline void fillData(QStandardItem *item, const QString &file,
-                            int line = -1, int start = -1, int end = -1)
-{
-    item->setData(file, FileNameRole);
-    item->setData(line, LineNumberRole);
-    item->setData(start, StartColumnRole);
-    item->setData(end, EndColumnRole);
-}
-
 void SearchResultsModel::addMatchedFile(const QString &file)
 {
     auto icon = iconForFile(file);
     auto text = QFileInfo(file).fileName();
     m_currentItem = new QStandardItem(icon, text);
-    fillData(m_currentItem, file);
+    m_currentItem->setData(file, FileNameRole);
     invisibleRootItem()->appendRow(m_currentItem);
 }
 
 void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
 {
     auto resultItem = new QStandardItem(text);
-    fillData(resultItem, file, line, start, end);
+    resultItem->setData(file, FileNameRole);
+    resultItem->setData(line, LineNumberRole);
+    resultItem->setData(start, StartColumnRole);
+    resultItem->setData(end, EndColumnRole);
     m_currentItem->appendRow(resultItem);
 }
 

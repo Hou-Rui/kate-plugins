@@ -22,6 +22,7 @@ public:
     explicit SearchResultsView(SearchResultsModel *model, QWidget *parent = nullptr);
 
 signals:
+    void jumpToFile(const QString &file);
     void jumpToResult(const QString &file, int line, int start, int end);
 
 protected:
