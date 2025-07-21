@@ -49,23 +49,24 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
         icon.paint(painter, iconRect, Qt::AlignCenter);
 
     const auto &[trimmed, text] = trimLeft(index.data(Qt::DisplayRole).toString());
-    int highlightStart = index.data(StartColumnRole).toInt() - trimmed;
-    int highlightEnd = index.data(EndColumnRole).toInt() - trimmed;
+    int start = index.data(StartColumnRole).toInt() - trimmed;
+    int end = index.data(EndColumnRole).toInt() - trimmed;
 
     QTextLayout layout(text, opt.font);
     QList<QTextLayout::FormatRange> formats;
 
-    if (highlightStart >= 0 && highlightEnd > highlightStart && highlightEnd <= text.length()) {
+    int length = text.length();
+    if (start >= 0 && end > start && end <= length) {
         QTextCharFormat normal;
         QTextCharFormat highlight;
         highlight.setBackground(opt.palette.highlight().color());
         highlight.setForeground(opt.palette.highlightedText());
 
-        if (highlightStart > 0)
-            formats.append({0, highlightStart, normal});
-        formats.append({highlightStart, highlightEnd - highlightStart, highlight});
-        if (highlightEnd < text.length())
-            formats.append({highlightEnd, static_cast<int>(text.length() - highlightEnd), normal});
+        if (start > 0)
+            formats.append({0, start, normal});
+        formats.append({start, end - start, highlight});
+        if (end < length)
+            formats.append({end, length - end, normal});
     }
 
     layout.setFormats(formats);
