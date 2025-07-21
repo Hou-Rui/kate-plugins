@@ -12,6 +12,7 @@
 class RipgrepCommand;
 class RipgrepSearchPlugin;
 class SearchResultsModel;
+class SearchResultsView;
 
 class RipgrepSearchView : public QObject
 {
@@ -38,6 +39,7 @@ private:
     QAction *m_caseSensitiveAction = nullptr;
     QAction *m_useRegexAction = nullptr;
     SearchResultsModel *m_resultsModel = nullptr;
+    SearchResultsView *m_resultsView = nullptr;
     RipgrepCommand *m_rg = nullptr;
 };
 

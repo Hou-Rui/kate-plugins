@@ -1,11 +1,15 @@
 #include "SearchResultsView.hpp"
 #include "RipgrepSearchPlugin.hpp"
 
+#include <KFileItem>
+
 #include <QApplication>
+#include <QFileInfo>
 #include <QPainter>
+#include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include <QTextLayout>
-#include <qtreeview.h>
+#include <QTreeView>
 
 enum ItemDataRole {
     FileNameRole = Qt::UserRole,
@@ -22,57 +26,61 @@ public:
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 };
 
+static std::pair<int, QString> trimLeft(const QString &str)
+{
+    int start = 0;
+    while (str[start].isSpace()) start++;
+    return {start, str.trimmed()};
+}
+
 void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
 {
-    QString text = index.data(Qt::DisplayRole).toString();
-    int highlightStart = index.data(StartColumnRole).toInt();
-    int highlightEnd = index.data(EndColumnRole).toInt();
-
     QStyleOptionViewItem opt = option;
     initStyleOption(&opt, index);
-
     painter->save();
 
-    // Draw item background (e.g., selection, hover, etc.)
-    QStyle *style = opt.widget ? opt.widget->style() : QApplication::style();
+    auto style = opt.widget ? opt.widget->style() : QApplication::style();
     style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
 
-    // Prepare the text layout
-    QTextLayout textLayout(text, opt.font);
-    textLayout.beginLayout();
-    QTextLine line = textLayout.createLine();
-    line.setLineWidth(opt.rect.width());
-    textLayout.endLayout();
-
-    // Positioning
-    QPointF textPos = opt.rect.topLeft();
-    textPos.setX(textPos.x() + 4); // small left padding
-    textPos.setY(textPos.y() + (opt.rect.height() - line.height()) / 2);
-
-    // Break text into 3 parts: before, highlight, after
-    QList<QTextLayout::FormatRange> formats;
-    if (highlightStart >= 0 && highlightEnd > highlightStart && highlightEnd <= text.length()) {
-        QTextCharFormat normalFormat;
-        QTextCharFormat highlightFormat;
-        highlightFormat.setBackground(opt.palette.highlight().color());
-        highlightFormat.setForeground(opt.palette.highlightedText());
-
-        if (highlightStart > 0) {
-            formats.append({0, highlightStart, normalFormat});
-        }
-
-        formats.append({highlightStart, highlightEnd - highlightStart, highlightFormat});
-
-        if (highlightEnd < text.length()) {
-            int length = text.length() - highlightEnd;
-            formats.append({highlightEnd, length, normalFormat});
-        }
-
-        textLayout.setFormats(formats);
+    auto icon = index.data(Qt::DecorationRole).value<QIcon>();
+    auto iconRect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &opt, opt.widget);
+    if (!icon.isNull()) {
+        icon.paint(painter, iconRect, Qt::AlignCenter);
     }
 
-    // Draw the text
-    textLayout.draw(painter, textPos);
+    const auto &[trimmed, text] = trimLeft(index.data(Qt::DisplayRole).toString());
+    int highlightStart = index.data(StartColumnRole).toInt() - trimmed;
+    int highlightEnd = index.data(EndColumnRole).toInt() - trimmed;
+
+    QTextLayout layout(text, opt.font);
+    QList<QTextLayout::FormatRange> formats;
+
+    if (highlightStart >= 0 && highlightEnd > highlightStart && highlightEnd <= text.length()) {
+        QTextCharFormat normal;
+        QTextCharFormat highlight;
+        highlight.setBackground(opt.palette.highlight().color());
+        highlight.setForeground(opt.palette.highlightedText());
+
+        if (highlightStart > 0)
+            formats.append({0, highlightStart, normal});
+        formats.append({highlightStart, highlightEnd - highlightStart, highlight});
+        if (highlightEnd < text.length()) {
+            formats.append({highlightEnd, static_cast<int>(text.length() - highlightEnd), normal});
+        }
+    }
+
+    layout.setFormats(formats);
+    layout.beginLayout();
+    auto line = layout.createLine();
+    layout.endLayout();
+
+    line.setLineWidth(opt.rect.width());
+
+    QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
+    int x = iconRect.right() + 4; // some spacing
+    int y = opt.rect.top() + (opt.rect.height() - line.height()) / 2;
+    layout.draw(painter, QPointF(x, y));
+
     painter->restore();
 }
 
@@ -81,4 +89,65 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
 {
     setModel(model);
     setItemDelegate(new SearchResultDelegate(this));
+    setWordWrap(false);
+    setUniformRowHeights(true);
+    setEditTriggers(NoEditTriggers);
+
+    connect(model, &SearchResultsModel::rowsInserted, [this](const QModelIndex &parent, auto, auto) {
+        expand(parent);
+    });
 }
+
+void SearchResultsView::mousePressEvent(QMouseEvent *event)
+{
+    QTreeView::mousePressEvent(event);
+    if (event->button() != Qt::LeftButton)
+        return;
+
+    auto index = indexAt(event->pos());
+    if (!index.isValid())
+        return;
+    
+    if (index.parent() == rootIndex()) {
+        expand(index);
+    }
+    
+    auto file = index.data(FileNameRole).toString();
+    auto line = index.data(LineNumberRole).toInt();
+    auto start = index.data(StartColumnRole).toInt();
+    auto end = index.data(EndColumnRole).toInt();
+    emit jumpToResult(file, line, start, end);
+}
+
+static inline QIcon iconForFile(const QString &filePath)
+{
+    KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);
+    return QIcon::fromTheme(item.iconName());
+}
+
+static inline void fillData(QStandardItem *item, const QString &file,
+                            int line = -1, int start = -1, int end = -1)
+{
+    item->setData(file, FileNameRole);
+    item->setData(line, LineNumberRole);
+    item->setData(start, StartColumnRole);
+    item->setData(end, EndColumnRole);
+}
+
+void SearchResultsModel::addMatchedFile(const QString &file)
+{
+    auto icon = iconForFile(file);
+    auto text = QFileInfo(file).fileName();
+    m_currentItem = new QStandardItem(icon, text);
+    fillData(m_currentItem, file);
+    invisibleRootItem()->appendRow(m_currentItem);
+}
+
+void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
+{
+    auto resultItem = new QStandardItem(text);
+    fillData(resultItem, file, line, start, end);
+    m_currentItem->appendRow(resultItem);
+}
+
+#include "SearchResultsView.moc"

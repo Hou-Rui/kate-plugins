@@ -81,16 +81,10 @@ void RipgrepSearchView::setupUi()
     m_useRegexAction->setCheckable(true);
     searchBar->addAction(m_useRegexAction);
 
-    auto resultsView = new SearchResultsView(toolView);
-    resultsView->setHeaderHidden(true);
-    resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-    m_resultsModel = resultsView->model();
-}
-
-static inline QIcon iconForFile(const QString &filePath)
-{
-    KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);
-    return QIcon::fromTheme(item.iconName());
+    m_resultsModel = new SearchResultsModel(this);
+    m_resultsView = new SearchResultsView(m_resultsModel, toolView);
+    m_resultsView->setHeaderHidden(true);
+    m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
 }
 
 void RipgrepSearchView::connectSignals()
@@ -102,43 +96,19 @@ void RipgrepSearchView::connectSignals()
 
     connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
     connect(m_searchEdit, &QLineEdit::editingFinished, this, &RipgrepSearchView::startSearch);
-    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
     connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
     connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
 
-    connect(m_rg, &RipgrepCommand::matchFoundInFile, [this](const QString &fileName) {
-        m_currentItem = new QTreeWidgetItem();
-        m_searchResults->addTopLevelItem(m_currentItem);
-        m_currentItem->setIcon(0, iconForFile(fileName));
-        m_currentItem->setText(0, QFileInfo(fileName).fileName());
-        m_currentItem->setData(0, FileNameRole, fileName);
-    });
+    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
+    connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
+    connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
 
-    connect(m_rg, &RipgrepCommand::matchFound, [this](RipgrepCommand::Result result) {
-        auto resultItem = new QTreeWidgetItem();
-        m_currentItem->addChild(resultItem);
-        resultItem->setData(0, FileNameRole, result.fileName);
-        resultItem->setData(0, LineNumberRole, result.lineNumber);
-        if (!result.submatches.isEmpty()) {
-            const auto &[start, end] = result.submatches.front();
-            resultItem->setData(0, StartColumnRole, start);
-            resultItem->setData(0, EndColumnRole, end);
-        }
-        auto resultWidget = new QLabel(renderSearchResult(result));
-        m_searchResults->setItemWidget(resultItem, 0, resultWidget);
-    });
-
-    connect(m_searchResults, &QTreeWidget::itemClicked, [this](QTreeWidgetItem *item, auto) {
-        auto fileName = item->data(0, FileNameRole).toString();
-        if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(fileName))) {
-            if (auto lineRole = item->data(0, LineNumberRole); lineRole.isValid()) {
-                auto line = lineRole.toInt() - 1;
-                auto start = item->data(0, StartColumnRole).toInt();
-                auto end = item->data(0, EndColumnRole).toInt();
-                view->setCursorPosition(KTextEditor::Cursor(line, start));
-                view->setSelection(KTextEditor::Range(line, start, line, end));
-            }
+    connect(m_resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
+        if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(file)); line != -1) {
+            line--;
+            view->setCursorPosition(KTextEditor::Cursor(line, start));
+            view->setSelection(KTextEditor::Range(line, start, line, end));
         }
     });
 }
@@ -171,7 +141,7 @@ void RipgrepSearchView::startSearch()
     if (term.isEmpty())
         return;
 
-    m_searchResults->clear();
+    m_resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
         m_rg->searchInDir(term, baseDir);
     } else if (auto files = openedFiles(); !files.isEmpty()) {
