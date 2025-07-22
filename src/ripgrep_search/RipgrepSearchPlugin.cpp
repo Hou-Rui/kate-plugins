@@ -25,6 +25,7 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVariantMap>
+#include <qstyle.h>
 
 #define L(literal) QStringLiteral(literal)
 #define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
@@ -44,8 +45,10 @@ RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::M
 static inline QToolBar *createToolBar(QWidget *parent)
 {
     auto toolBar = new QToolBar(parent);
-    toolBar->layout()->setContentsMargins(2, 2, 2, 2);
-    auto iconSize = parent->style()->pixelMetric(QStyle::PM_ButtonIconSize, nullptr);
+    auto style = parent ? parent->style() : QApplication::style();
+    int margin = style->pixelMetric(QStyle::PM_DockWidgetTitleMargin);
+    int iconSize = style->pixelMetric(QStyle::PM_ButtonIconSize);
+    toolBar->layout()->setContentsMargins(margin, margin, margin, margin);
     toolBar->setIconSize(QSize(iconSize, iconSize));
     return toolBar;
 }
@@ -108,7 +111,7 @@ void RipgrepSearchView::connectSignals()
         m_mainWindow->openUrl(QUrl::fromLocalFile(file));
     });
     connect(m_resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
-        if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(file)); line != -1) {
+        if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(file))) {
             line--;
             view->setCursorPosition(KTextEditor::Cursor(line, start));
             view->setSelection(KTextEditor::Range(line, start, line, end));
