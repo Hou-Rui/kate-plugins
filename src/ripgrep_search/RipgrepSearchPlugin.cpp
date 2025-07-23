@@ -20,15 +20,12 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QSizePolicy>
+#include <QStyle>
 #include <QStyledItemDelegate>
 #include <QTextStream>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVariantMap>
-#include <qstyle.h>
-
-#define L(literal) QStringLiteral(literal)
-#define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
 
 K_PLUGIN_CLASS_WITH_JSON(RipgrepSearchPlugin, "ripgrep_search.json")
 
@@ -58,29 +55,29 @@ void RipgrepSearchView::setupUi()
     // clang-format off
     auto toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin",
                                                  KTextEditor::MainWindow::Left,
-                                                 THEME_ICON("search"), tr("Ripgrep Search"));
+                                                 QIcon::fromTheme("search"), tr("Ripgrep Search"));
     // clang-format on
 
     auto headerBar = createToolBar(toolView);
     auto searchLabel = new QLabel(tr("<b>Search</b>"));
     searchLabel->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
     headerBar->addWidget(searchLabel);
-    m_refreshAction = new QAction(THEME_ICON("view-refresh"), tr("Refresh"));
+    m_refreshAction = new QAction(QIcon::fromTheme("view-refresh"), tr("Refresh"));
     headerBar->addAction(m_refreshAction);
-    m_clearAction = new QAction(THEME_ICON("edit-clear-all"), tr("Clear results"));
+    m_clearAction = new QAction(QIcon::fromTheme("edit-clear-all"), tr("Clear results"));
     headerBar->addAction(m_clearAction);
 
     auto searchBar = createToolBar(toolView);
     m_searchEdit = new QLineEdit();
     m_searchEdit->setPlaceholderText(tr("Search"));
     searchBar->addWidget(m_searchEdit);
-    m_wholeWordAction = new QAction(THEME_ICON("ime-punctuation-fullwidth"), tr("Match whole words"));
+    m_wholeWordAction = new QAction(QIcon::fromTheme("ime-punctuation-fullwidth"), tr("Match whole words"));
     m_wholeWordAction->setCheckable(true);
     searchBar->addAction(m_wholeWordAction);
-    m_caseSensitiveAction = new QAction(THEME_ICON("format-text-subscript"), tr("Case sensitive"));
+    m_caseSensitiveAction = new QAction(QIcon::fromTheme("format-text-subscript"), tr("Case sensitive"));
     m_caseSensitiveAction->setCheckable(true);
     searchBar->addAction(m_caseSensitiveAction);
-    m_useRegexAction = new QAction(THEME_ICON("code-context"), tr("Use regular expression"));
+    m_useRegexAction = new QAction(QIcon::fromTheme("code-context"), tr("Use regular expression"));
     m_useRegexAction->setCheckable(true);
     searchBar->addAction(m_useRegexAction);
 

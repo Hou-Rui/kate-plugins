@@ -6,11 +6,11 @@
 #include <QApplication>
 #include <QFileInfo>
 #include <QPainter>
+#include <QPalette>
 #include <QStandardItemModel>
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
-#include <qpalette.h>
 
 enum ItemDataRole {
     FileNameRole = Qt::UserRole,
@@ -35,10 +35,12 @@ static inline bool isMatchedLine(const QModelIndex &index)
 
 static std::pair<int, QString> trimLeft(const QString &str)
 {
-    int start = 0;
-    while (str[start].isSpace())
-        start++;
-    return {start, str.trimmed()};
+    auto result = str.trimmed();
+    for (int i = 0; i < str.length(); i++) {
+        if (!str[i].isSpace())
+            return {i, result};
+    }
+    return {str.length(), result};
 }
 
 static QList<QTextLayout::FormatRange> highlightFormats(const QPalette &palette, int length, int start, int end)
