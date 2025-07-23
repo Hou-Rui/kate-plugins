@@ -10,6 +10,7 @@
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
+#include <qpalette.h>
 
 enum ItemDataRole {
     FileNameRole = Qt::UserRole,
@@ -26,12 +27,35 @@ public:
     void paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const override;
 };
 
+static inline bool isMatchedLine(const QModelIndex &index)
+{
+    auto role = index.data(LineNumberRole);
+    return role.isValid() && role.canConvert<int>();
+}
+
 static std::pair<int, QString> trimLeft(const QString &str)
 {
     int start = 0;
     while (str[start].isSpace())
         start++;
     return {start, str.trimmed()};
+}
+
+static QList<QTextLayout::FormatRange> highlightFormats(const QPalette &palette, int length, int start, int end)
+{
+    QList<QTextLayout::FormatRange> formats;
+    if (start >= 0 && end > start && end <= length) {
+        QTextCharFormat normal;
+        QTextCharFormat highlight;
+        highlight.setBackground(palette.highlight().color());
+        highlight.setForeground(palette.highlightedText());
+        if (start > 0)
+            formats.append({0, start, normal});
+        formats.append({start, end - start, highlight});
+        if (end < length)
+            formats.append({end, length - end, normal});
+    }
+    return formats;
 }
 
 void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &option, const QModelIndex &index) const
@@ -53,23 +77,10 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     int end = index.data(EndColumnRole).toInt() - trimmed;
 
     QTextLayout layout(text, opt.font);
-    QList<QTextLayout::FormatRange> formats;
-
-    int length = text.length();
-    if (start >= 0 && end > start && end <= length) {
-        QTextCharFormat normal;
-        QTextCharFormat highlight;
-        highlight.setBackground(opt.palette.highlight().color());
-        highlight.setForeground(opt.palette.highlightedText());
-
-        if (start > 0)
-            formats.append({0, start, normal});
-        formats.append({start, end - start, highlight});
-        if (end < length)
-            formats.append({end, length - end, normal});
+    if (isMatchedLine(index)) {
+        const auto &formats = highlightFormats(opt.palette, text.length(), start, end);
+        layout.setFormats(formats);
     }
-
-    layout.setFormats(formats);
     layout.beginLayout();
     auto line = layout.createLine();
     layout.endLayout();
@@ -112,8 +123,8 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
         expand(index);
 
     auto file = index.data(FileNameRole).toString();
-    if (auto lineRole = index.data(LineNumberRole); lineRole.isValid()) {
-        auto line = lineRole.toInt();
+    if (isMatchedLine(index)) {
+        auto line = index.data(LineNumberRole).toInt();
         auto start = index.data(StartColumnRole).toInt();
         auto end = index.data(EndColumnRole).toInt();
         emit jumpToResult(file, line, start, end);
@@ -133,6 +144,7 @@ void SearchResultsModel::addMatchedFile(const QString &file)
     auto icon = iconForFile(file);
     auto text = QFileInfo(file).fileName();
     m_currentItem = new QStandardItem(icon, text);
+    m_currentItem->setData(file, Qt::ToolTipRole);
     m_currentItem->setData(file, FileNameRole);
     invisibleRootItem()->appendRow(m_currentItem);
 }
@@ -140,6 +152,8 @@ void SearchResultsModel::addMatchedFile(const QString &file)
 void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
 {
     auto resultItem = new QStandardItem(text);
+    auto tooltip = tr("%1, line %2, column %3 to %4").arg(file).arg(line).arg(start + 1).arg(end + 1);
+    resultItem->setData(tooltip, Qt::ToolTipRole);
     resultItem->setData(file, FileNameRole);
     resultItem->setData(line, LineNumberRole);
     resultItem->setData(start, StartColumnRole);
