@@ -132,7 +132,7 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
                 emit matchFound(file, text, line, start, end);
             }
         } else if (type == "summary") {
-            int nanos = resolveJson(data, {"elapsed_total", "nanos"}.toInt();
+            int nanos = resolveJson(data, {"elapsed_total", "nanos"}).toInt();
             int found = resolveJson(data, {"matches"}).toInt();
             emit searchFinished(nanos, found);
         }
