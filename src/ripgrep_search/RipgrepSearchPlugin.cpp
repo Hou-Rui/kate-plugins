@@ -85,6 +85,9 @@ void RipgrepSearchView::setupUi()
     m_resultsView = new SearchResultsView(m_resultsModel, toolView);
     m_resultsView->setHeaderHidden(true);
     m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+
+    m_statusBar = new QStatusBar(toolView);
+    m_statusBar->showMessage(tr("Ready to search."));
 }
 
 void RipgrepSearchView::connectSignals()
@@ -103,6 +106,10 @@ void RipgrepSearchView::connectSignals()
     connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
     connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
     connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
+    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, int nanos) {
+        auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
+        m_statusBar->showMessage(tr("Found %1 results(s) in %2 seconds.").arg(found).arg(seconds));
+    });
 
     connect(m_resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
         m_mainWindow->openUrl(QUrl::fromLocalFile(file));
@@ -114,6 +121,7 @@ void RipgrepSearchView::connectSignals()
             view->setSelection(KTextEditor::Range(line, start, line, end));
         }
     });
+
 }
 
 QString RipgrepSearchView::projectBaseDir()
@@ -144,6 +152,7 @@ void RipgrepSearchView::startSearch()
     if (term.isEmpty())
         return;
 
+    m_statusBar->showMessage(tr("Searching..."));
     m_resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
         m_rg->searchInDir(term, baseDir);

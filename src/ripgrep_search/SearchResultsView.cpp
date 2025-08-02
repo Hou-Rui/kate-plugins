@@ -11,6 +11,7 @@
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
+#include <qnamespace.h>
 
 enum ItemDataRole {
     FileNameRole = Qt::UserRole,
@@ -87,8 +88,6 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     auto line = layout.createLine();
     layout.endLayout();
 
-    line.setLineWidth(opt.rect.width());
-
     QRect textRect = style->subElementRect(QStyle::SE_ItemViewItemText, &opt, opt.widget);
     int x = iconRect.right() + style->pixelMetric(QStyle::PM_LineEditIconMargin);
     int y = opt.rect.top() + (opt.rect.height() - line.height()) / 2;
@@ -103,6 +102,7 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
     setModel(model);
     setItemDelegate(new SearchResultDelegate(this));
     setWordWrap(false);
+    setHorizontalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     setUniformRowHeights(true);
     setEditTriggers(NoEditTriggers);
 
