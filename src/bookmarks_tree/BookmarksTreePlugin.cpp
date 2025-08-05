@@ -17,7 +17,7 @@
 
 #include <algorithm>
 
-#define THEME_ICON(name) QIcon::fromTheme(QStringLiteral(name))
+using namespace Qt::Literals::StringLiterals;
 
 K_PLUGIN_CLASS_WITH_JSON(BookmarksTreePlugin, "bookmarks_tree.json")
 
@@ -33,10 +33,14 @@ QObject *BookmarksTreePlugin::createView(KTextEditor::MainWindow *mainWindow)
 
 void BookmarksTreeView::showMessage(const QString &msg)
 {
-    QVariantMap map{{QStringLiteral("category"), QStringLiteral("Bookmarks")},
-                    {QStringLiteral("categoryIcon"), THEME_ICON("bookmarks")},
-                    {QStringLiteral("type"), QStringLiteral("Log")},
-                    {QStringLiteral("text"), msg}};
+    // clang-format off
+    QVariantMap map {
+        { u"category"_s, u"Bookmarks"_s },
+        { u"categoryIcon"_s, QIcon::fromTheme(u"bookmarks"_s) },
+        { u"type"_s, u"Log"_s },
+        { u"text"_s, msg }
+    };
+    // clang-format on
     QMetaObject::invokeMethod(m_mainWindow->parent(), "showMessage", Qt::DirectConnection, Q_ARG(QVariantMap, map));
 }
 
@@ -51,7 +55,11 @@ BookmarksTreeView::BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::M
 
 void BookmarksTreeView::setupUi()
 {
-    m_toolView = m_mainWindow->createToolView(m_plugin, "BookmarksTreePlugin", KTextEditor::MainWindow::Left, THEME_ICON("bookmarks"), tr("Bookmarks"));
+    // clang-format off
+    m_toolView = m_mainWindow->createToolView(m_plugin, u"BookmarksTreePlugin"_s,
+                                              KTextEditor::MainWindow::Left, QIcon::fromTheme(u"bookmarks"_s), tr("Bookmarks"));
+    // clang-format on
+
     m_treeWidget = new QTreeWidget(m_toolView);
     m_treeWidget->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
     m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
@@ -73,8 +81,8 @@ void BookmarksTreeView::connectSignals()
     connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, [this](const QPoint &pos) {
         auto menu = new QMenu(m_treeWidget);
         menu->setAttribute(Qt::WA_DeleteOnClose);
-        auto actionRefresh = menu->addAction(THEME_ICON("view-refresh"), tr("Refresh Bookmarks"));
-        auto actionClear = menu->addAction(THEME_ICON("bookmark-remove"), tr("Clear all Bookmarks"));
+        auto actionRefresh = menu->addAction(QIcon::fromTheme("view-refresh"), tr("Refresh Bookmarks"));
+        auto actionClear = menu->addAction(QIcon::fromTheme("bookmark-remove"), tr("Clear all Bookmarks"));
         connect(actionRefresh, &QAction::triggered, this, &BookmarksTreeView::refreshAllBookmarks);
         connect(actionClear, &QAction::triggered, this, &BookmarksTreeView::clearAllBookmarks);
         menu->popup(m_treeWidget->mapToGlobal(pos));
@@ -124,7 +132,7 @@ void BookmarksTreeView::refreshBookmarks(KTextEditor::Document *document)
         return;
     }
     auto fileItem = new QTreeWidgetItem({document->url().fileName()});
-    fileItem->setIcon(0, THEME_ICON("document-multiple"));
+    fileItem->setIcon(0, QIcon::fromTheme("document-multiple"));
     auto marks = document->marks().values();
     std::sort(marks.begin(), marks.end(), [](auto m1, auto m2) {
         return m1->line < m2->line;
@@ -136,7 +144,7 @@ void BookmarksTreeView::refreshBookmarks(KTextEditor::Document *document)
         auto lineContent = document->line(mark->line).trimmed();
         auto itemContent = QString("%1: %2").arg(mark->line + 1).arg(lineContent);
         auto item = new QTreeWidgetItem({itemContent});
-        item->setIcon(0, THEME_ICON("bookmarks"));
+        item->setIcon(0, QIcon::fromTheme("bookmarks"));
         item->setData(0, DocumentRole, QVariant::fromValue(document));
         item->setData(0, MarkRole, QVariant::fromValue(mark));
         fileItem->addChild(item);
