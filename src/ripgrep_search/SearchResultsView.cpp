@@ -11,7 +11,6 @@
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
-#include <qnamespace.h>
 
 enum ItemDataRole {
     FileNameRole = Qt::UserRole,

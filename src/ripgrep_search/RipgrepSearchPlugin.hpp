@@ -25,6 +25,7 @@ private slots:
     void setupUi();
     void connectSignals();
     void startSearch();
+    void resetStatusMessage();
 
 private:
     QString projectBaseDir();

@@ -50,6 +50,13 @@ static inline QToolBar *createToolBar(QWidget *parent)
     return toolBar;
 }
 
+void RipgrepSearchView::resetStatusMessage()
+{
+    if (m_statusBar) {
+        m_statusBar->showMessage(tr("Ready to search."));
+    }
+}
+
 void RipgrepSearchView::setupUi()
 {
     // clang-format off
@@ -74,7 +81,7 @@ void RipgrepSearchView::setupUi()
     m_wholeWordAction = new QAction(QIcon::fromTheme("ime-punctuation-fullwidth"), tr("Match whole words"));
     m_wholeWordAction->setCheckable(true);
     searchBar->addAction(m_wholeWordAction);
-    m_caseSensitiveAction = new QAction(QIcon::fromTheme("format-text-subscript"), tr("Case sensitive"));
+    m_caseSensitiveAction = new QAction(QIcon::fromTheme("format-text-superscript"), tr("Case sensitive"));
     m_caseSensitiveAction->setCheckable(true);
     searchBar->addAction(m_caseSensitiveAction);
     m_useRegexAction = new QAction(QIcon::fromTheme("code-context"), tr("Use regular expression"));
@@ -87,7 +94,7 @@ void RipgrepSearchView::setupUi()
     m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
 
     m_statusBar = new QStatusBar(toolView);
-    m_statusBar->showMessage(tr("Ready to search."));
+    resetStatusMessage();
 }
 
 void RipgrepSearchView::connectSignals()
@@ -95,6 +102,7 @@ void RipgrepSearchView::connectSignals()
     connect(m_clearAction, &QAction::triggered, [this] {
         m_searchEdit->clear();
         m_resultsModel->clear();
+        resetStatusMessage();
     });
 
     connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
@@ -108,7 +116,8 @@ void RipgrepSearchView::connectSignals()
     connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
     connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, int nanos) {
         auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
-        m_statusBar->showMessage(tr("Found %1 results(s) in %2 seconds.").arg(found).arg(seconds));
+        auto results = found == 1 ? tr("result") : tr("results");
+        m_statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
     });
 
     connect(m_resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
@@ -121,7 +130,6 @@ void RipgrepSearchView::connectSignals()
             view->setSelection(KTextEditor::Range(line, start, line, end));
         }
     });
-
 }
 
 QString RipgrepSearchView::projectBaseDir()
