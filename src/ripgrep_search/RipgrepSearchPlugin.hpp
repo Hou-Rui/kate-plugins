@@ -2,26 +2,27 @@
 
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/Plugin>
+#include <KXMLGUIClient>
 
 #include <QAction>
 #include <QLineEdit>
-#include <QProcess>
-#include <QStandardItemModel>
-#include <QTreeView>
 #include <QStatusBar>
+#include <QTreeView>
 
 class RipgrepCommand;
 class RipgrepSearchPlugin;
 class SearchResultsModel;
 class SearchResultsView;
 
-class RipgrepSearchView : public QObject
+class RipgrepSearchView : public QObject, public KXMLGUIClient
 {
     Q_OBJECT
 public:
     explicit RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow);
+    ~RipgrepSearchView();
 
 private slots:
+    void setupActions();
     void setupUi();
     void connectSignals();
     void startSearch();
@@ -33,8 +34,9 @@ private:
 
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
-    QWidget *m_content = nullptr;
+    QWidget *m_toolView = nullptr;
     QLineEdit *m_searchEdit = nullptr;
+    QAction *m_searchSelectionAction = nullptr;
     QAction *m_refreshAction = nullptr;
     QAction *m_clearAction = nullptr;
     QAction *m_wholeWordAction = nullptr;

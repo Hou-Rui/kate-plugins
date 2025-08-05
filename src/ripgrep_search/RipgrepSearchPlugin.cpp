@@ -2,7 +2,9 @@
 #include "RipgrepCommand.hpp"
 #include "SearchResultsView.hpp"
 
+#include <KActionCollection>
 #include <KFileItem>
+#include <KXMLGUIFactory>
 #include <KPluginFactory>
 #include <KTextEditor/Document>
 #include <KTextEditor/Editor>
@@ -35,8 +37,14 @@ RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::M
     , m_mainWindow(mainWindow)
     , m_rg(new RipgrepCommand(this))
 {
+    setupActions();
     setupUi();
     connectSignals();
+}
+
+RipgrepSearchView::~RipgrepSearchView()
+{
+    m_mainWindow->guiFactory()->removeClient(this);
 }
 
 static inline QToolBar *createToolBar(QWidget *parent)
@@ -57,15 +65,27 @@ void RipgrepSearchView::resetStatusMessage()
     }
 }
 
+void RipgrepSearchView::setupActions()
+{
+    KXMLGUIClient::setComponentName("ripgrep_search", tr("RIPGrep Search"));
+    m_mainWindow->guiFactory()->addClient(this);
+    m_searchSelectionAction = actionCollection()->addAction(QStringLiteral("ripgrep_search_in_files"));
+    auto defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::ALT | Qt::Key_F);
+    KActionCollection::setDefaultShortcut(m_searchSelectionAction, defaultShortcut);
+    m_searchSelectionAction->setText(tr("Find in Files using RIPGrep"));
+    m_searchSelectionAction->setIcon(QIcon::fromTheme(QStringLiteral("edit-find")));
+    m_searchSelectionAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+}
+
 void RipgrepSearchView::setupUi()
 {
     // clang-format off
-    auto toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin",
-                                                 KTextEditor::MainWindow::Left,
-                                                 QIcon::fromTheme("search"), tr("Ripgrep Search"));
+    m_toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin",
+                                              KTextEditor::MainWindow::Left,
+                                              QIcon::fromTheme("search"), tr("Ripgrep Search"));
     // clang-format on
 
-    auto headerBar = createToolBar(toolView);
+    auto headerBar = createToolBar(m_toolView);
     auto searchLabel = new QLabel(tr("<b>Search</b>"));
     searchLabel->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
     headerBar->addWidget(searchLabel);
@@ -74,7 +94,7 @@ void RipgrepSearchView::setupUi()
     m_clearAction = new QAction(QIcon::fromTheme("edit-clear-all"), tr("Clear results"));
     headerBar->addAction(m_clearAction);
 
-    auto searchBar = createToolBar(toolView);
+    auto searchBar = createToolBar(m_toolView);
     m_searchEdit = new QLineEdit();
     m_searchEdit->setPlaceholderText(tr("Search"));
     searchBar->addWidget(m_searchEdit);
@@ -89,11 +109,11 @@ void RipgrepSearchView::setupUi()
     searchBar->addAction(m_useRegexAction);
 
     m_resultsModel = new SearchResultsModel(this);
-    m_resultsView = new SearchResultsView(m_resultsModel, toolView);
+    m_resultsView = new SearchResultsView(m_resultsModel, m_toolView);
     m_resultsView->setHeaderHidden(true);
     m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
 
-    m_statusBar = new QStatusBar(toolView);
+    m_statusBar = new QStatusBar(m_toolView);
     resetStatusMessage();
 }
 
@@ -110,6 +130,15 @@ void RipgrepSearchView::connectSignals()
     connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
     connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
+    connect(m_searchSelectionAction, &QAction::triggered, [this] {
+        if (!m_toolView->isVisible())
+            m_mainWindow->showToolView(m_toolView);
+        if (auto view = m_mainWindow->activeView(); view && view->selection()) {
+            auto selectionText = view->selectionText().trimmed();
+            m_searchEdit->setText(selectionText);
+            startSearch();
+        }
+    });
 
     connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
     connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
