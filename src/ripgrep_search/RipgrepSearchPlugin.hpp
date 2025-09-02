@@ -5,7 +5,7 @@
 #include <KXMLGUIClient>
 
 #include <QAction>
-#include <QLineEdit>
+#include <QComboBox>
 #include <QStatusBar>
 #include <QTreeView>
 
@@ -35,7 +35,7 @@ private:
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
     QWidget *m_toolView = nullptr;
-    QLineEdit *m_searchEdit = nullptr;
+    QComboBox *m_searchBox = nullptr;
     QAction *m_searchSelectionAction = nullptr;
     QAction *m_refreshAction = nullptr;
     QAction *m_clearAction = nullptr;

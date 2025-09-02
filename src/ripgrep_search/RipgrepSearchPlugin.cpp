@@ -95,9 +95,10 @@ void RipgrepSearchView::setupUi()
     headerBar->addAction(m_clearAction);
 
     auto searchBar = createToolBar(m_toolView);
-    m_searchEdit = new QLineEdit();
-    m_searchEdit->setPlaceholderText(tr("Search"));
-    searchBar->addWidget(m_searchEdit);
+    m_searchBox = new QComboBox();
+    m_searchBox->setEditable(true);
+    m_searchBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    searchBar->addWidget(m_searchBox);
     m_wholeWordAction = new QAction(QIcon::fromTheme("ime-punctuation-fullwidth"), tr("Match whole words"));
     m_wholeWordAction->setCheckable(true);
     searchBar->addAction(m_wholeWordAction);
@@ -120,13 +121,13 @@ void RipgrepSearchView::setupUi()
 void RipgrepSearchView::connectSignals()
 {
     connect(m_clearAction, &QAction::triggered, [this] {
-        m_searchEdit->clear();
+        m_searchBox->clear();
         m_resultsModel->clear();
         resetStatusMessage();
     });
 
     connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
-    connect(m_searchEdit, &QLineEdit::editingFinished, this, &RipgrepSearchView::startSearch);
+    connect(m_searchBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
     connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
@@ -135,7 +136,8 @@ void RipgrepSearchView::connectSignals()
             m_mainWindow->showToolView(m_toolView);
         if (auto view = m_mainWindow->activeView(); view && view->selection()) {
             auto selectionText = view->selectionText().trimmed();
-            m_searchEdit->setText(selectionText);
+            m_searchBox->addItem(selectionText);
+            m_searchBox->setCurrentIndex(m_searchBox->count() - 1);
             startSearch();
         }
     });
@@ -185,7 +187,7 @@ QList<QString> RipgrepSearchView::openedFiles()
 
 void RipgrepSearchView::startSearch()
 {
-    auto term = m_searchEdit->text();
+    auto term = m_searchBox->currentText();
     if (term.isEmpty())
         return;
 
