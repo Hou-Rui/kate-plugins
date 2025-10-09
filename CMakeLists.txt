@@ -3,6 +3,7 @@ project(kateplugins)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+set(CMAKE_CXX_STANDARD 17)
 set(QT_MIN_VERSION "6.5.0")
 set(KF6_DEP_VERSION "6.0.0")
 set(QT_MAJOR_VERSION "6")
