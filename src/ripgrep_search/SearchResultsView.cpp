@@ -1,5 +1,4 @@
 #include "SearchResultsView.hpp"
-#include "RipgrepSearchPlugin.hpp"
 
 #include <KFileItem>
 

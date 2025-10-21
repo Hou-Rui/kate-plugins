@@ -6,7 +6,7 @@
 #include <KPluginFactory>
 #include <KXMLGUIFactory>
 
-K_PLUGIN_CLASS_WITH_JSON(RipgrepSearchPlugin, "ripgrep_search.json")
+K_PLUGIN_CLASS_WITH_JSON(RipgrepSearchPlugin, "kate_ripgrep_search.json")
 
 RipgrepSearchPlugin::RipgrepSearchPlugin(QObject *parent)
     : KTextEditor::Plugin(parent)

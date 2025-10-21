@@ -1,17 +1,17 @@
 #include "RipgrepSearchView.hpp"
-#include "RipgrepSearchPlugin.hpp"
 #include "RipgrepCommand.hpp"
+#include "RipgrepSearchPlugin.hpp"
 #include "SearchResultsView.hpp"
 
 #include <KActionCollection>
 #include <KFileItem>
-#include <KXMLGUIFactory>
 #include <KPluginFactory>
 #include <KTextEditor/Document>
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
 #include <KTextEditor/Range>
 #include <KTextEditor/View>
+#include <KXMLGUIFactory>
 
 #include <QAction>
 #include <QApplication>
@@ -38,12 +38,12 @@ RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::M
 {
     setupActions();
     setupUi();
-    connectSignals();
+    setupRipgrepProcess();
 }
 
 RipgrepSearchView::~RipgrepSearchView()
 {
-    // m_mainWindow->guiFactory()->removeClient(this);
+    m_mainWindow->guiFactory()->removeClient(this);
 }
 
 static inline QToolBar *createToolBar(QWidget *parent)
@@ -64,16 +64,47 @@ void RipgrepSearchView::resetStatusMessage()
     }
 }
 
+QAction *RipgrepSearchView::addAction(const QString &name, const QString &iconName, const QString &text)
+{
+    auto action = actionCollection()->addAction(name);
+    action->setIcon(QIcon::fromTheme(iconName));
+    action->setText(text);
+    action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
+    return action;
+}
+
+QAction *RipgrepSearchView::addCheckableAction(const QString &name, const QString &iconName, const QString &text)
+{
+    auto action = addAction(name, iconName, text);
+    action->setCheckable(true);
+    return action;
+}
+
 void RipgrepSearchView::setupActions()
 {
-    KXMLGUIClient::setComponentName("ripgrep_search", tr("RIPGrep Search"));
+    KXMLGUIClient::setComponentName("kate_ripgrep_search", tr("RIPGrep Search"));
+    setXMLFile("actions.rc");
+
+    m_searchSelectionAction = addAction("ripgrep_search_in_files", "edit-find", tr("Find in Files using RIPGrep"));
+    KActionCollection::setDefaultShortcut(m_searchSelectionAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::ALT | Qt::Key_F));
+    connect(m_searchSelectionAction, &QAction::triggered, this, &RipgrepSearchView::searchSelection);
+
+    m_refreshAction = addAction("ripgrep_refresh", "view-refresh", tr("Refresh"));
+    connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
+
+    m_clearAction = addAction("ripgrep_clear", "edit-clear-all", tr("Clear results"));
+    connect(m_clearAction, &QAction::triggered, this, &RipgrepSearchView::clearResults);
+
+    m_wholeWordAction = addCheckableAction("ripgrep_whole_word", "ime-punctuation-fullwidth", tr("Match whole words"));
+    connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
+
+    m_caseSensitiveAction = addCheckableAction("ripgrep_case_sensitive", "format-text-superscript", tr("Case sensitive"));
+    connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
+
+    m_useRegexAction = addCheckableAction("ripgrep_use_regex", "code-context", tr("Use regular expression"));
+    connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
+
     m_mainWindow->guiFactory()->addClient(this);
-    m_searchSelectionAction = actionCollection()->addAction(QStringLiteral("ripgrep_search_in_files"));
-    auto defaultShortcut = QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::ALT | Qt::Key_F);
-    KActionCollection::setDefaultShortcut(m_searchSelectionAction, defaultShortcut);
-    m_searchSelectionAction->setText(tr("Find in Files using RIPGrep"));
-    m_searchSelectionAction->setIcon(QIcon::fromTheme(QStringLiteral("edit-find")));
-    m_searchSelectionAction->setShortcutContext(Qt::WidgetWithChildrenShortcut);
 }
 
 void RipgrepSearchView::setupUi()
@@ -88,68 +119,23 @@ void RipgrepSearchView::setupUi()
     auto searchLabel = new QLabel(tr("<b>Search</b>"));
     searchLabel->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
     headerBar->addWidget(searchLabel);
-    m_refreshAction = new QAction(QIcon::fromTheme("view-refresh"), tr("Refresh"));
     headerBar->addAction(m_refreshAction);
-    m_clearAction = new QAction(QIcon::fromTheme("edit-clear-all"), tr("Clear results"));
     headerBar->addAction(m_clearAction);
 
     auto searchBar = createToolBar(m_toolView);
     m_searchBox = new QComboBox();
     m_searchBox->setEditable(true);
     m_searchBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    connect(m_searchBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     searchBar->addWidget(m_searchBox);
-    m_wholeWordAction = new QAction(QIcon::fromTheme("ime-punctuation-fullwidth"), tr("Match whole words"));
-    m_wholeWordAction->setCheckable(true);
     searchBar->addAction(m_wholeWordAction);
-    m_caseSensitiveAction = new QAction(QIcon::fromTheme("format-text-superscript"), tr("Case sensitive"));
-    m_caseSensitiveAction->setCheckable(true);
     searchBar->addAction(m_caseSensitiveAction);
-    m_useRegexAction = new QAction(QIcon::fromTheme("code-context"), tr("Use regular expression"));
-    m_useRegexAction->setCheckable(true);
     searchBar->addAction(m_useRegexAction);
 
     m_resultsModel = new SearchResultsModel(this);
     m_resultsView = new SearchResultsView(m_resultsModel, m_toolView);
     m_resultsView->setHeaderHidden(true);
     m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-
-    m_statusBar = new QStatusBar(m_toolView);
-    resetStatusMessage();
-}
-
-void RipgrepSearchView::connectSignals()
-{
-    connect(m_clearAction, &QAction::triggered, [this] {
-        m_searchBox->clear();
-        m_resultsModel->clear();
-        resetStatusMessage();
-    });
-
-    connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
-    connect(m_searchBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
-    connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
-    connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
-    connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
-    connect(m_searchSelectionAction, &QAction::triggered, [this] {
-        if (!m_toolView->isVisible())
-            m_mainWindow->showToolView(m_toolView);
-        if (auto view = m_mainWindow->activeView(); view && view->selection()) {
-            auto selectionText = view->selectionText().trimmed();
-            m_searchBox->addItem(selectionText);
-            m_searchBox->setCurrentIndex(m_searchBox->count() - 1);
-            startSearch();
-        }
-    });
-
-    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
-    connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
-    connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
-    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, int nanos) {
-        auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
-        auto results = found == 1 ? tr("result") : tr("results");
-        m_statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
-    });
-
     connect(m_resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
         m_mainWindow->openUrl(QUrl::fromLocalFile(file));
     });
@@ -159,6 +145,21 @@ void RipgrepSearchView::connectSignals()
             view->setCursorPosition(KTextEditor::Cursor(line, start));
             view->setSelection(KTextEditor::Range(line, start, line, end));
         }
+    });
+
+    m_statusBar = new QStatusBar(m_toolView);
+    resetStatusMessage();
+}
+
+void RipgrepSearchView::setupRipgrepProcess()
+{
+    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
+    connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
+    connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
+    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, int nanos) {
+        auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
+        auto results = found == 1 ? tr("result") : tr("results");
+        m_statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
     });
 }
 
@@ -199,4 +200,24 @@ void RipgrepSearchView::startSearch()
     } else {
         qInfo() << "No opened documents, not performing searching.";
     }
+}
+
+void RipgrepSearchView::searchSelection()
+{
+    if (!m_toolView->isVisible())
+        m_mainWindow->showToolView(m_toolView);
+
+    if (auto view = m_mainWindow->activeView(); view && view->selection()) {
+        auto selectionText = view->selectionText().trimmed();
+        m_searchBox->addItem(selectionText);
+        m_searchBox->setCurrentIndex(m_searchBox->count() - 1);
+        startSearch();
+    }
+}
+
+void RipgrepSearchView::clearResults()
+{
+    m_searchBox->clear();
+    m_resultsModel->clear();
+    resetStatusMessage();
 }

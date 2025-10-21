@@ -24,13 +24,17 @@ public:
 private slots:
     void setupActions();
     void setupUi();
-    void connectSignals();
+    void setupRipgrepProcess();
     void startSearch();
+    void searchSelection();
     void resetStatusMessage();
+    void clearResults();
 
 private:
     QString projectBaseDir();
     QList<QString> openedFiles();
+    QAction *addAction(const QString &name, const QString &iconName, const QString &text);
+    QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
 
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
