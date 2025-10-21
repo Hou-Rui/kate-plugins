@@ -1,3 +1,4 @@
+<!-- kate: syntax XML; -->
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE gui SYSTEM "kpartgui.dtd">
 <gui name="kate_ripgrep_search" library="kate_ripgrep_search" version="1" translationDomain="kate_ripgrep_search">
@@ -10,6 +11,7 @@
       <Action name="ripgrep_whole_word"/>
       <Action name="ripgrep_case_sensitive"/>
       <Action name="ripgrep_use_regex"/>
+      <Action name="ripgrep_show_advanced"/>
     </Menu>
   </MenuBar>
 </gui>

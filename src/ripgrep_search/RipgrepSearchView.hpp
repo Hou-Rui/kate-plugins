@@ -21,6 +21,9 @@ public:
     explicit RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow);
     ~RipgrepSearchView();
 
+signals:
+    void showAdvancedChanged(bool value);
+
 private slots:
     void setupActions();
     void setupUi();
@@ -46,6 +49,9 @@ private:
     QAction *m_wholeWordAction = nullptr;
     QAction *m_caseSensitiveAction = nullptr;
     QAction *m_useRegexAction = nullptr;
+    QAction *m_showAdvancedAction = nullptr;
+    QComboBox *m_includeFileBox = nullptr;
+    QComboBox *m_excludeFileBox = nullptr;
     SearchResultsModel *m_resultsModel = nullptr;
     SearchResultsView *m_resultsView = nullptr;
     QStatusBar *m_statusBar = nullptr;

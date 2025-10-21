@@ -40,4 +40,3 @@ private:
         bool useRegex = false;
     } m_options;
 };
-

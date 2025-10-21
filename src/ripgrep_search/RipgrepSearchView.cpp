@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QFileInfo>
+#include <QFormLayout>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -54,6 +55,16 @@ static inline QToolBar *createToolBar(QWidget *parent)
     int iconSize = style->pixelMetric(QStyle::PM_ButtonIconSize);
     toolBar->layout()->setContentsMargins(margin, margin, margin, margin);
     toolBar->setIconSize(QSize(iconSize, iconSize));
+    return toolBar;
+}
+
+static inline QToolBar *createSeparator(QWidget *parent)
+{
+    auto toolBar = new QToolBar(parent);
+    toolBar->layout()->setContentsMargins(0, 0, 0, 0);
+    auto separator = new QFrame();
+    separator->setFrameStyle(QFrame::VLine);
+    toolBar->addWidget(separator);
     return toolBar;
 }
 
@@ -104,7 +115,18 @@ void RipgrepSearchView::setupActions()
     m_useRegexAction = addCheckableAction("ripgrep_use_regex", "code-context", tr("Use regular expression"));
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
 
+    m_showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
+    connect(m_showAdvancedAction, &QAction::triggered, this, &RipgrepSearchView::showAdvancedChanged);
+
     m_mainWindow->guiFactory()->addClient(this);
+}
+
+inline static QComboBox *createEditableComboBox()
+{
+    auto comboBox = new QComboBox();
+    comboBox->setEditable(true);
+    comboBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    return comboBox;
 }
 
 void RipgrepSearchView::setupUi()
@@ -121,16 +143,25 @@ void RipgrepSearchView::setupUi()
     headerBar->addWidget(searchLabel);
     headerBar->addAction(m_refreshAction);
     headerBar->addAction(m_clearAction);
+    headerBar->addAction(m_showAdvancedAction);
 
     auto searchBar = createToolBar(m_toolView);
-    m_searchBox = new QComboBox();
-    m_searchBox->setEditable(true);
-    m_searchBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    m_searchBox = createEditableComboBox();
     connect(m_searchBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     searchBar->addWidget(m_searchBox);
     searchBar->addAction(m_wholeWordAction);
     searchBar->addAction(m_caseSensitiveAction);
     searchBar->addAction(m_useRegexAction);
+
+    auto includeBar = createToolBar(m_toolView);
+    includeBar->setVisible(false);
+    connect(this, &RipgrepSearchView::showAdvancedChanged, includeBar, &QToolBar::setVisible);
+    auto filterContainer = new QWidget();
+    includeBar->addWidget(filterContainer);
+    auto filterForm = new QFormLayout(filterContainer);
+    filterForm->setContentsMargins(0, 0, 0, 0);
+    filterForm->addRow(tr("Include:"), m_includeFileBox = createEditableComboBox());
+    filterForm->addRow(tr("Exclude:"), m_excludeFileBox = createEditableComboBox());
 
     m_resultsModel = new SearchResultsModel(this);
     m_resultsView = new SearchResultsView(m_resultsModel, m_toolView);
