@@ -116,7 +116,6 @@ void RipgrepSearchView::setupActions()
     connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
 
     m_showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
-    connect(m_showAdvancedAction, &QAction::triggered, this, &RipgrepSearchView::showAdvancedChanged);
 
     m_mainWindow->guiFactory()->addClient(this);
 }
@@ -155,7 +154,7 @@ void RipgrepSearchView::setupUi()
 
     auto includeBar = createToolBar(m_toolView);
     includeBar->setVisible(false);
-    connect(this, &RipgrepSearchView::showAdvancedChanged, includeBar, &QToolBar::setVisible);
+    connect(m_showAdvancedAction, &QAction::triggered, includeBar, &QToolBar::setVisible);
     auto filterContainer = new QWidget();
     includeBar->addWidget(filterContainer);
     auto filterForm = new QFormLayout(filterContainer);

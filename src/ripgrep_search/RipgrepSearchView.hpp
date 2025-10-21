@@ -21,9 +21,6 @@ public:
     explicit RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow);
     ~RipgrepSearchView();
 
-signals:
-    void showAdvancedChanged(bool value);
-
 private slots:
     void setupActions();
     void setupUi();
