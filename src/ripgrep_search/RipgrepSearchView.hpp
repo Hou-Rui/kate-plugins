@@ -32,9 +32,10 @@ private slots:
 
 private:
     QString projectBaseDir();
-    QList<QString> openedFiles();
+    QStringList openedFiles();
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
     QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
+    QComboBox *createEditableComboBox();
 
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;

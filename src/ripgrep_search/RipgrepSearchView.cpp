@@ -120,11 +120,12 @@ void RipgrepSearchView::setupActions()
     m_mainWindow->guiFactory()->addClient(this);
 }
 
-inline static QComboBox *createEditableComboBox()
+QComboBox *RipgrepSearchView::createEditableComboBox()
 {
     auto comboBox = new QComboBox();
     comboBox->setEditable(true);
     comboBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    connect(comboBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     return comboBox;
 }
 
@@ -146,7 +147,6 @@ void RipgrepSearchView::setupUi()
 
     auto searchBar = createToolBar(m_toolView);
     m_searchBox = createEditableComboBox();
-    connect(m_searchBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     searchBar->addWidget(m_searchBox);
     searchBar->addAction(m_wholeWordAction);
     searchBar->addAction(m_caseSensitiveAction);
@@ -201,9 +201,9 @@ QString RipgrepSearchView::projectBaseDir()
     return QString();
 }
 
-QList<QString> RipgrepSearchView::openedFiles()
+QStringList RipgrepSearchView::openedFiles()
 {
-    QList<QString> result;
+    QStringList result;
     auto editor = KTextEditor::Editor::instance();
     for (auto doc : editor->documents()) {
         if (doc->url().isLocalFile()) {
@@ -215,11 +215,22 @@ QList<QString> RipgrepSearchView::openedFiles()
     return result;
 }
 
+inline static QStringList commaSeparated(const QString &line)
+{
+    auto result = line.split(",", Qt::SkipEmptyParts);
+    for (auto &&name : result)
+        name = name.trimmed();
+    return result;
+}
+
 void RipgrepSearchView::startSearch()
 {
     auto term = m_searchBox->currentText();
     if (term.isEmpty())
         return;
+
+    m_rg->setIncludeFiles(commaSeparated(m_includeFileBox->currentText()));
+    m_rg->setExcludeFiles(commaSeparated(m_excludeFileBox->currentText()));
 
     m_statusBar->showMessage(tr("Searching..."));
     m_resultsModel->clear();
@@ -248,6 +259,8 @@ void RipgrepSearchView::searchSelection()
 void RipgrepSearchView::clearResults()
 {
     m_searchBox->clear();
+    m_includeFileBox->clear();
+    m_excludeFileBox->clear();
     m_resultsModel->clear();
     resetStatusMessage();
 }

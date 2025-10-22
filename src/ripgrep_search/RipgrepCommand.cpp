@@ -40,13 +40,23 @@ void RipgrepCommand::setUseRegex(bool newValue)
     emit searchOptionsChanged();
 }
 
+void RipgrepCommand::setIncludeFiles(const QStringList &files)
+{
+    m_options.includeFiles = files;
+}
+
+void RipgrepCommand::setExcludeFiles(const QStringList &files)
+{
+    m_options.excludeFiles = files;
+}
+
 void RipgrepCommand::ensureStopped()
 {
     if (state() != NotRunning)
         kill();
 }
 
-void RipgrepCommand::search(const QString &term, const QString &dir, const QList<QString> &files)
+void RipgrepCommand::search(const QString &term, const QString &dir, const QStringList &files)
 {
     QStringList args;
     if (m_options.wholeWord)
@@ -57,16 +67,19 @@ void RipgrepCommand::search(const QString &term, const QString &dir, const QList
         args << "--ignore-case";
     if (!m_options.useRegex)
         args << "--fixed-strings";
+    for (const auto &file : m_options.includeFiles)
+        args << "--glob" << file;
+    for (const auto &file : m_options.excludeFiles)
+        args << "--glob" << QString("!%1").arg(file);
     args << "--json" << "--regexp" << term;
 
-    if (!dir.isEmpty()) {
+    if (!dir.isEmpty())
         args << dir;
-    } else if (!files.isEmpty()) {
+    else if (!files.isEmpty())
         for (const auto &file : files)
             args << file;
-    } else {
+    else
         return;
-    }
 
     ensureStopped();
     start("rg", args, QIODevice::ReadOnly);
@@ -77,7 +90,7 @@ void RipgrepCommand::searchInDir(const QString &term, const QString &dir)
     search(term, dir, {});
 }
 
-void RipgrepCommand::searchInFiles(const QString &term, const QList<QString> &files)
+void RipgrepCommand::searchInFiles(const QString &term, const QStringList &files)
 {
     search(term, QString(), files);
 }
@@ -90,7 +103,7 @@ struct JsonResolutionError : public QException {
     }
 };
 
-static QJsonValue resolveJson(const QJsonObject &root, const QList<QString> &args)
+static QJsonValue resolveJson(const QJsonObject &root, const QStringList &args)
 {
     Q_ASSERT(args.size() > 0);
     QJsonObject obj = root;
