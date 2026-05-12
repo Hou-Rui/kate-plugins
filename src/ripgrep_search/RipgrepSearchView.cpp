@@ -120,11 +120,12 @@ void RipgrepSearchView::setupActions()
     m_mainWindow->guiFactory()->addClient(this);
 }
 
-QComboBox *RipgrepSearchView::createEditableComboBox()
+QComboBox *RipgrepSearchView::createEditableComboBox(const QString &placeholderText)
 {
     auto comboBox = new QComboBox();
     comboBox->setEditable(true);
     comboBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    comboBox->lineEdit()->setPlaceholderText(placeholderText);
     connect(comboBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
     return comboBox;
 }
@@ -146,7 +147,7 @@ void RipgrepSearchView::setupUi()
     headerBar->addAction(m_showAdvancedAction);
 
     auto searchBar = createToolBar(m_toolView);
-    m_searchBox = createEditableComboBox();
+    m_searchBox = createEditableComboBox(tr("Search (⇵ for history)"));
     searchBar->addWidget(m_searchBox);
     searchBar->addAction(m_wholeWordAction);
     searchBar->addAction(m_caseSensitiveAction);
@@ -159,8 +160,10 @@ void RipgrepSearchView::setupUi()
     includeBar->addWidget(filterContainer);
     auto filterForm = new QFormLayout(filterContainer);
     filterForm->setContentsMargins(0, 0, 0, 0);
-    filterForm->addRow(tr("Include:"), m_includeFileBox = createEditableComboBox());
-    filterForm->addRow(tr("Exclude:"), m_excludeFileBox = createEditableComboBox());
+    m_includeFileBox = createEditableComboBox(tr("Files to include, separated by commas"));
+    m_excludeFileBox = createEditableComboBox(tr("Files to exclude, separated by commas"));
+    filterForm->addRow(tr("Include:"), m_includeFileBox);
+    filterForm->addRow(tr("Exclude:"), m_excludeFileBox);
 
     m_resultsModel = new SearchResultsModel(this);
     m_resultsView = new SearchResultsView(m_resultsModel, m_toolView);
@@ -186,7 +189,7 @@ void RipgrepSearchView::setupRipgrepProcess()
     connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
     connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
     connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
-    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, int nanos) {
+    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, qint64 nanos) {
         auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
         auto results = found == 1 ? tr("result") : tr("results");
         m_statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));

@@ -23,7 +23,7 @@ public slots:
 signals:
     void matchFoundInFile(const QString &file);
     void matchFound(const QString &file, const QString &text, int line, int start, int end);
-    void searchFinished(int found, int nanos);
+    void searchFinished(int found, qint64 nanos);
     void searchOptionsChanged();
 
 private:

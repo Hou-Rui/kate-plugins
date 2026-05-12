@@ -146,7 +146,7 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
             }
         } else if (type == "summary") {
             int found = resolveJson(data, {"stats", "matches"}).toInt();
-            int nanos = resolveJson(data, {"elapsed_total", "nanos"}).toInt();
+            qint64 nanos = resolveJson(data, {"elapsed_total", "nanos"}).toInteger();
             emit searchFinished(found, nanos);
         }
     } catch (JsonResolutionError &err) {

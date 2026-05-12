@@ -152,7 +152,10 @@ void SearchResultsModel::addMatchedFile(const QString &file)
 void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
 {
     auto resultItem = new QStandardItem(text);
-    auto tooltip = tr("%1, line %2, column %3 to %4").arg(file).arg(line).arg(start + 1).arg(end + 1);
+    auto tooltip = tr("%1<hr/>%2<br/>line %3, column %4 to %5")
+        .arg(text.trimmed().toHtmlEscaped())
+        .arg(file.toHtmlEscaped())
+        .arg(line).arg(start + 1).arg(end + 1);
     resultItem->setData(tooltip, Qt::ToolTipRole);
     resultItem->setData(file, FileNameRole);
     resultItem->setData(line, LineNumberRole);

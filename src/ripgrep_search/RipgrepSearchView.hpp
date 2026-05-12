@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QComboBox>
+#include <QLabel>
 #include <QStatusBar>
 #include <QTreeView>
 
@@ -35,7 +36,7 @@ private:
     QStringList openedFiles();
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
     QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
-    QComboBox *createEditableComboBox();
+    QComboBox *createEditableComboBox(const QString &placeholderText);
 
     RipgrepSearchPlugin *m_plugin = nullptr;
     KTextEditor::MainWindow *m_mainWindow = nullptr;
