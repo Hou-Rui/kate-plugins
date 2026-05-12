@@ -3,12 +3,11 @@
 #include <QObject>
 #include <QProcess>
 
-class RipgrepCommand : public QProcess
+class RipgrepCommand : public QObject
 {
     Q_OBJECT
 public:
     explicit RipgrepCommand(QObject *parent);
-    ~RipgrepCommand();
 
 public slots:
     void searchInDir(const QString &term, const QString &dir);
@@ -26,16 +25,15 @@ signals:
     void searchFinished(int found, qint64 nanos);
     void searchOptionsChanged();
 
-private:
-    using QProcess::setArguments;
-    using QProcess::setProgram;
-    using QProcess::start;
-    using QProcess::startCommand;
+private slots:
+    void processReadOutput();
 
-    void ensureStopped();
+private:
+    QStringList buildArgs(const QString &term, const QString &dir, const QStringList &files);
     void parseMatch(const QByteArray &match);
     void search(const QString &term, const QString &dir, const QStringList &files);
 
+    QProcess *m_process = nullptr;
     struct SearchOptions {
         bool wholeWord = false;
         bool caseSensitive = false;

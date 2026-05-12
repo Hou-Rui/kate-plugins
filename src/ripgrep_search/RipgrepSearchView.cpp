@@ -235,6 +235,8 @@ void RipgrepSearchView::startSearch()
     m_rg->setIncludeFiles(commaSeparated(m_includeFileBox->currentText()));
     m_rg->setExcludeFiles(commaSeparated(m_excludeFileBox->currentText()));
 
+    QCoreApplication::removePostedEvents(m_resultsModel, QEvent::MetaCall);
+
     m_statusBar->showMessage(tr("Searching..."));
     m_resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {

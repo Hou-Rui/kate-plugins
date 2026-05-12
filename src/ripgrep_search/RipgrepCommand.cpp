@@ -7,19 +7,8 @@
 #include <QProcess>
 
 RipgrepCommand::RipgrepCommand(QObject *parent)
-    : QProcess(parent)
+    : QObject(parent)
 {
-    connect(this, &RipgrepCommand::readyReadStandardOutput, [this] {
-        while (canReadLine()) {
-            auto line = readLine();
-            parseMatch(line.trimmed());
-        }
-    });
-}
-
-RipgrepCommand::~RipgrepCommand()
-{
-    ensureStopped();
 }
 
 void RipgrepCommand::setWholeWord(bool newValue)
@@ -50,10 +39,12 @@ void RipgrepCommand::setExcludeFiles(const QStringList &files)
     m_options.excludeFiles = files;
 }
 
-void RipgrepCommand::ensureStopped()
+void RipgrepCommand::processReadOutput()
 {
-    if (state() != NotRunning)
-        kill();
+    while (m_process->canReadLine()) {
+        auto line = m_process->readLine();
+        parseMatch(line.trimmed());
+    }
 }
 
 void RipgrepCommand::search(const QString &term, const QString &dir, const QStringList &files)
@@ -73,16 +64,28 @@ void RipgrepCommand::search(const QString &term, const QString &dir, const QStri
         args << "--glob" << QString("!%1").arg(file);
     args << "--json" << "--regexp" << term;
 
-    if (!dir.isEmpty())
+    if (!dir.isEmpty()) {
+        qInfo() << "[ripgrep] Searching in directory:" << dir;
         args << dir;
-    else if (!files.isEmpty())
+    } else if (!files.isEmpty()) {
+        qInfo() << "[ripgrep] Searching in file:" << files;
         for (const auto &file : files)
             args << file;
-    else
+    } else {
+        qInfo() << "[ripgrep] Nothing to search; abort searching";
         return;
+    }
 
-    ensureStopped();
-    start("rg", args, QIODevice::ReadOnly);
+    if (m_process != nullptr) {
+        if (m_process->state() != QProcess::NotRunning) {
+            m_process->terminate();
+            m_process->waitForFinished();
+        }
+        m_process->deleteLater();
+    }
+    m_process = new QProcess(this);
+    connect(m_process, &QProcess::readyReadStandardOutput, this, &RipgrepCommand::processReadOutput);
+    m_process->start("rg", args, QIODevice::ReadOnly);
 }
 
 void RipgrepCommand::searchInDir(const QString &term, const QString &dir)
