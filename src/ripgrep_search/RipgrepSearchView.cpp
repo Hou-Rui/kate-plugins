@@ -16,6 +16,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QByteArray>
+#include <QComboBox>
 #include <QFileInfo>
 #include <QFormLayout>
 #include <QJsonDocument>
@@ -24,6 +25,7 @@
 #include <QLineEdit>
 #include <QProcess>
 #include <QSizePolicy>
+#include <QStatusBar>
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QTextStream>
@@ -31,20 +33,63 @@
 #include <QVBoxLayout>
 #include <QVariantMap>
 
+class RipgrepSearchViewPrivate : public QObject
+{
+    Q_OBJECT
+public slots:
+    void setupActions();
+    void setupUi();
+    void setupRipgrepProcess();
+    void startSearch();
+    void searchSelection();
+    void resetStatusMessage();
+    void clearResults();
+
+public:
+    QString projectBaseDir();
+    QStringList openedFiles();
+    QAction *addAction(const QString &name, const QString &iconName, const QString &text);
+    QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
+    QComboBox *createEditableComboBox(const QString &placeholderText);
+
+    RipgrepSearchView *q;
+    RipgrepSearchPlugin *plugin = nullptr;
+    KTextEditor::MainWindow *mainWindow = nullptr;
+    QWidget *toolView = nullptr;
+    QComboBox *searchBox = nullptr;
+    QAction *searchSelectionAction = nullptr;
+    QAction *refreshAction = nullptr;
+    QAction *clearAction = nullptr;
+    QAction *wholeWordAction = nullptr;
+    QAction *caseSensitiveAction = nullptr;
+    QAction *useRegexAction = nullptr;
+    QAction *showAdvancedAction = nullptr;
+    QComboBox *includeFileBox = nullptr;
+    QComboBox *excludeFileBox = nullptr;
+    SearchResultsModel *resultsModel = nullptr;
+    SearchResultsView *resultsView = nullptr;
+    QStatusBar *statusBar = nullptr;
+    RipgrepCommand *rg = nullptr;
+};
+
 RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow)
     : QObject(plugin)
-    , m_plugin(plugin)
-    , m_mainWindow(mainWindow)
-    , m_rg(new RipgrepCommand(this))
+    , d(new RipgrepSearchViewPrivate)
 {
-    setupActions();
-    setupUi();
-    setupRipgrepProcess();
+    d->moveToThread(thread());
+    d->q = this;
+    d->plugin = plugin;
+    d->mainWindow = mainWindow;
+    d->rg = new RipgrepCommand(this);
+
+    d->setupActions();
+    d->setupUi();
+    d->setupRipgrepProcess();
 }
 
 RipgrepSearchView::~RipgrepSearchView()
 {
-    m_mainWindow->guiFactory()->removeClient(this);
+    d->mainWindow->guiFactory()->removeClient(this);
 }
 
 static inline QToolBar *createToolBar(QWidget *parent)
@@ -68,143 +113,143 @@ static inline QToolBar *createSeparator(QWidget *parent)
     return toolBar;
 }
 
-void RipgrepSearchView::resetStatusMessage()
+void RipgrepSearchViewPrivate::resetStatusMessage()
 {
-    if (m_statusBar) {
-        m_statusBar->showMessage(tr("Ready to search."));
+    if (statusBar) {
+        statusBar->showMessage(tr("Ready to search."));
     }
 }
 
-QAction *RipgrepSearchView::addAction(const QString &name, const QString &iconName, const QString &text)
+QAction *RipgrepSearchViewPrivate::addAction(const QString &name, const QString &iconName, const QString &text)
 {
-    auto action = actionCollection()->addAction(name);
+    auto action = q->actionCollection()->addAction(name);
     action->setIcon(QIcon::fromTheme(iconName));
     action->setText(text);
     action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     return action;
 }
 
-QAction *RipgrepSearchView::addCheckableAction(const QString &name, const QString &iconName, const QString &text)
+QAction *RipgrepSearchViewPrivate::addCheckableAction(const QString &name, const QString &iconName, const QString &text)
 {
     auto action = addAction(name, iconName, text);
     action->setCheckable(true);
     return action;
 }
 
-void RipgrepSearchView::setupActions()
+void RipgrepSearchViewPrivate::setupActions()
 {
-    KXMLGUIClient::setComponentName("kate_ripgrep_search", tr("RIPGrep Search"));
-    setXMLFile("actions.rc");
+    q->KXMLGUIClient::setComponentName("kate_ripgrep_search", tr("RIPGrep Search"));
+    q->setXMLFile("actions.rc");
 
-    m_searchSelectionAction = addAction("ripgrep_search_in_files", "edit-find", tr("Find in Files using RIPGrep"));
-    KActionCollection::setDefaultShortcut(m_searchSelectionAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::ALT | Qt::Key_F));
-    connect(m_searchSelectionAction, &QAction::triggered, this, &RipgrepSearchView::searchSelection);
+    searchSelectionAction = addAction("ripgrep_search_in_files", "edit-find", tr("Find in Files using RIPGrep"));
+    KActionCollection::setDefaultShortcut(searchSelectionAction, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::ALT | Qt::Key_F));
+    connect(searchSelectionAction, &QAction::triggered, this, &RipgrepSearchViewPrivate::searchSelection);
 
-    m_refreshAction = addAction("ripgrep_refresh", "view-refresh", tr("Refresh"));
-    connect(m_refreshAction, &QAction::triggered, this, &RipgrepSearchView::startSearch);
+    refreshAction = addAction("ripgrep_refresh", "view-refresh", tr("Refresh"));
+    connect(refreshAction, &QAction::triggered, this, &RipgrepSearchViewPrivate::startSearch);
 
-    m_clearAction = addAction("ripgrep_clear", "edit-clear-all", tr("Clear results"));
-    connect(m_clearAction, &QAction::triggered, this, &RipgrepSearchView::clearResults);
+    clearAction = addAction("ripgrep_clear", "edit-clear-all", tr("Clear results"));
+    connect(clearAction, &QAction::triggered, this, &RipgrepSearchViewPrivate::clearResults);
 
-    m_wholeWordAction = addCheckableAction("ripgrep_whole_word", "ime-punctuation-fullwidth", tr("Match whole words"));
-    connect(m_wholeWordAction, &QAction::triggered, m_rg, &RipgrepCommand::setWholeWord);
+    wholeWordAction = addCheckableAction("ripgrep_whole_word", "ime-punctuation-fullwidth", tr("Match whole words"));
+    connect(wholeWordAction, &QAction::triggered, rg, &RipgrepCommand::setWholeWord);
 
-    m_caseSensitiveAction = addCheckableAction("ripgrep_case_sensitive", "format-text-superscript", tr("Case sensitive"));
-    connect(m_caseSensitiveAction, &QAction::triggered, m_rg, &RipgrepCommand::setCaseSensitive);
+    caseSensitiveAction = addCheckableAction("ripgrep_case_sensitive", "format-text-superscript", tr("Case sensitive"));
+    connect(caseSensitiveAction, &QAction::triggered, rg, &RipgrepCommand::setCaseSensitive);
 
-    m_useRegexAction = addCheckableAction("ripgrep_use_regex", "code-context", tr("Use regular expression"));
-    connect(m_useRegexAction, &QAction::triggered, m_rg, &RipgrepCommand::setUseRegex);
+    useRegexAction = addCheckableAction("ripgrep_use_regex", "code-context", tr("Use regular expression"));
+    connect(useRegexAction, &QAction::triggered, rg, &RipgrepCommand::setUseRegex);
 
-    m_showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
+    showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
 
-    m_mainWindow->guiFactory()->addClient(this);
+    mainWindow->guiFactory()->addClient(q);
 }
 
-QComboBox *RipgrepSearchView::createEditableComboBox(const QString &placeholderText)
+QComboBox *RipgrepSearchViewPrivate::createEditableComboBox(const QString &placeholderText)
 {
     auto comboBox = new QComboBox();
     comboBox->setEditable(true);
     comboBox->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
     comboBox->lineEdit()->setPlaceholderText(placeholderText);
-    connect(comboBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchView::startSearch);
+    connect(comboBox->lineEdit(), &QLineEdit::returnPressed, this, &RipgrepSearchViewPrivate::startSearch);
     return comboBox;
 }
 
-void RipgrepSearchView::setupUi()
+void RipgrepSearchViewPrivate::setupUi()
 {
     // clang-format off
-    m_toolView = m_mainWindow->createToolView(m_plugin, "RipgrepSearchPlugin",
+    toolView = mainWindow->createToolView(plugin, "RipgrepSearchPlugin",
                                               KTextEditor::MainWindow::Left,
                                               QIcon::fromTheme("search"), tr("Ripgrep Search"));
     // clang-format on
 
-    auto headerBar = createToolBar(m_toolView);
+    auto headerBar = createToolBar(toolView);
     auto searchLabel = new QLabel(tr("<b>Search</b>"));
     searchLabel->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
     headerBar->addWidget(searchLabel);
-    headerBar->addAction(m_refreshAction);
-    headerBar->addAction(m_clearAction);
-    headerBar->addAction(m_showAdvancedAction);
+    headerBar->addAction(refreshAction);
+    headerBar->addAction(clearAction);
+    headerBar->addAction(showAdvancedAction);
 
-    auto searchBar = createToolBar(m_toolView);
-    m_searchBox = createEditableComboBox(tr("Search (⇵ for history)"));
-    searchBar->addWidget(m_searchBox);
-    searchBar->addAction(m_wholeWordAction);
-    searchBar->addAction(m_caseSensitiveAction);
-    searchBar->addAction(m_useRegexAction);
+    auto searchBar = createToolBar(toolView);
+    searchBox = createEditableComboBox(tr("Search (⇵ for history)"));
+    searchBar->addWidget(searchBox);
+    searchBar->addAction(wholeWordAction);
+    searchBar->addAction(caseSensitiveAction);
+    searchBar->addAction(useRegexAction);
 
-    auto includeBar = createToolBar(m_toolView);
+    auto includeBar = createToolBar(toolView);
     includeBar->setVisible(false);
-    connect(m_showAdvancedAction, &QAction::triggered, includeBar, &QToolBar::setVisible);
+    connect(showAdvancedAction, &QAction::triggered, includeBar, &QToolBar::setVisible);
     auto filterContainer = new QWidget();
     includeBar->addWidget(filterContainer);
     auto filterForm = new QFormLayout(filterContainer);
     filterForm->setContentsMargins(0, 0, 0, 0);
-    m_includeFileBox = createEditableComboBox(tr("Files to include, separated by commas"));
-    m_excludeFileBox = createEditableComboBox(tr("Files to exclude, separated by commas"));
-    filterForm->addRow(tr("Include:"), m_includeFileBox);
-    filterForm->addRow(tr("Exclude:"), m_excludeFileBox);
+    includeFileBox = createEditableComboBox(tr("Files to include, separated by commas"));
+    excludeFileBox = createEditableComboBox(tr("Files to exclude, separated by commas"));
+    filterForm->addRow(tr("Include:"), includeFileBox);
+    filterForm->addRow(tr("Exclude:"), excludeFileBox);
 
-    m_resultsModel = new SearchResultsModel(this);
-    m_resultsView = new SearchResultsView(m_resultsModel, m_toolView);
-    m_resultsView->setHeaderHidden(true);
-    m_resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-    connect(m_resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
-        m_mainWindow->openUrl(QUrl::fromLocalFile(file));
+    resultsModel = new SearchResultsModel(this);
+    resultsView = new SearchResultsView(resultsModel, toolView);
+    resultsView->setHeaderHidden(true);
+    resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    connect(resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
+        mainWindow->openUrl(QUrl::fromLocalFile(file));
     });
-    connect(m_resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
-        if (auto view = m_mainWindow->openUrl(QUrl::fromLocalFile(file))) {
+    connect(resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
+        if (auto view = mainWindow->openUrl(QUrl::fromLocalFile(file))) {
             line--;
             view->setCursorPosition(KTextEditor::Cursor(line, start));
             view->setSelection(KTextEditor::Range(line, start, line, end));
         }
     });
 
-    m_statusBar = new QStatusBar(m_toolView);
+    statusBar = new QStatusBar(toolView);
     resetStatusMessage();
 }
 
-void RipgrepSearchView::setupRipgrepProcess()
+void RipgrepSearchViewPrivate::setupRipgrepProcess()
 {
-    connect(m_rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchView::startSearch);
-    connect(m_rg, &RipgrepCommand::matchFoundInFile, m_resultsModel, &SearchResultsModel::addMatchedFile);
-    connect(m_rg, &RipgrepCommand::matchFound, m_resultsModel, &SearchResultsModel::addMatched);
-    connect(m_rg, &RipgrepCommand::searchFinished, [this](int found, qint64 nanos) {
+    connect(rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchViewPrivate::startSearch);
+    connect(rg, &RipgrepCommand::matchFoundInFile, resultsModel, &SearchResultsModel::addMatchedFile);
+    connect(rg, &RipgrepCommand::matchFound, resultsModel, &SearchResultsModel::addMatched);
+    connect(rg, &RipgrepCommand::searchFinished, [this](int found, qint64 nanos) {
         auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
         auto results = found == 1 ? tr("result") : tr("results");
-        m_statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
+        statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
     });
 }
 
-QString RipgrepSearchView::projectBaseDir()
+QString RipgrepSearchViewPrivate::projectBaseDir()
 {
-    if (auto projectPlugin = m_mainWindow->pluginView("kateprojectplugin")) {
+    if (auto projectPlugin = mainWindow->pluginView("kateprojectplugin")) {
         return projectPlugin->property("projectBaseDir").toString();
     }
     return QString();
 }
 
-QStringList RipgrepSearchView::openedFiles()
+QStringList RipgrepSearchViewPrivate::openedFiles()
 {
     QStringList result;
     auto editor = KTextEditor::Editor::instance();
@@ -226,46 +271,48 @@ inline static QStringList commaSeparated(const QString &line)
     return result;
 }
 
-void RipgrepSearchView::startSearch()
+void RipgrepSearchViewPrivate::startSearch()
 {
-    auto term = m_searchBox->currentText();
+    auto term = searchBox->currentText();
     if (term.isEmpty())
         return;
 
-    m_rg->setIncludeFiles(commaSeparated(m_includeFileBox->currentText()));
-    m_rg->setExcludeFiles(commaSeparated(m_excludeFileBox->currentText()));
+    rg->setIncludeFiles(commaSeparated(includeFileBox->currentText()));
+    rg->setExcludeFiles(commaSeparated(excludeFileBox->currentText()));
 
-    QCoreApplication::removePostedEvents(m_resultsModel, QEvent::MetaCall);
+    QCoreApplication::removePostedEvents(resultsModel, QEvent::MetaCall);
 
-    m_statusBar->showMessage(tr("Searching..."));
-    m_resultsModel->clear();
+    statusBar->showMessage(tr("Searching..."));
+    resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
-        m_rg->searchInDir(term, baseDir);
+        rg->searchInDir(term, baseDir);
     } else if (auto files = openedFiles(); !files.isEmpty()) {
-        m_rg->searchInFiles(term, files);
+        rg->searchInFiles(term, files);
     } else {
         qInfo() << "No opened documents, not performing searching.";
     }
 }
 
-void RipgrepSearchView::searchSelection()
+void RipgrepSearchViewPrivate::searchSelection()
 {
-    if (!m_toolView->isVisible())
-        m_mainWindow->showToolView(m_toolView);
+    if (!toolView->isVisible())
+        mainWindow->showToolView(toolView);
 
-    if (auto view = m_mainWindow->activeView(); view && view->selection()) {
+    if (auto view = mainWindow->activeView(); view && view->selection()) {
         auto selectionText = view->selectionText().trimmed();
-        m_searchBox->addItem(selectionText);
-        m_searchBox->setCurrentIndex(m_searchBox->count() - 1);
+        searchBox->addItem(selectionText);
+        searchBox->setCurrentIndex(searchBox->count() - 1);
         startSearch();
     }
 }
 
-void RipgrepSearchView::clearResults()
+void RipgrepSearchViewPrivate::clearResults()
 {
-    m_searchBox->clear();
-    m_includeFileBox->clear();
-    m_excludeFileBox->clear();
-    m_resultsModel->clear();
+    searchBox->clear();
+    includeFileBox->clear();
+    excludeFileBox->clear();
+    resultsModel->clear();
     resetStatusMessage();
 }
+
+#include "RipgrepSearchView.moc"

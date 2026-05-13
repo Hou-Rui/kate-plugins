@@ -6,61 +6,75 @@
 #include <QJsonObject>
 #include <QProcess>
 
+struct SearchOptions {
+    bool wholeWord = false;
+    bool caseSensitive = false;
+    bool useRegex = false;
+    QStringList includeFiles;
+    QStringList excludeFiles;
+};
+
+struct RipgrepCommandPrivate {
+    QStringList buildArgs(const QString &term, const QString &dir, const QStringList &files);
+    void parseMatch(const QByteArray &match);
+    void search(const QString &term, const QString &dir, const QStringList &files);
+
+    RipgrepCommand *q;
+    QProcess *process = nullptr;
+    SearchOptions options;
+};
+
 RipgrepCommand::RipgrepCommand(QObject *parent)
     : QObject(parent)
+    , d(new RipgrepCommandPrivate)
 {
+    d->q = this;
 }
+
+RipgrepCommand::~RipgrepCommand() = default;
 
 void RipgrepCommand::setWholeWord(bool newValue)
 {
-    m_options.wholeWord = newValue;
+    d->options.wholeWord = newValue;
     emit searchOptionsChanged();
 }
 
 void RipgrepCommand::setCaseSensitive(bool newValue)
 {
-    m_options.caseSensitive = newValue;
+    d->options.caseSensitive = newValue;
     emit searchOptionsChanged();
 }
 
 void RipgrepCommand::setUseRegex(bool newValue)
 {
-    m_options.useRegex = newValue;
+    d->options.useRegex = newValue;
     emit searchOptionsChanged();
 }
 
 void RipgrepCommand::setIncludeFiles(const QStringList &files)
 {
-    m_options.includeFiles = files;
+    d->options.includeFiles = files;
 }
 
 void RipgrepCommand::setExcludeFiles(const QStringList &files)
 {
-    m_options.excludeFiles = files;
+    d->options.excludeFiles = files;
 }
 
-void RipgrepCommand::processReadOutput()
-{
-    while (m_process->canReadLine()) {
-        auto line = m_process->readLine();
-        parseMatch(line.trimmed());
-    }
-}
-
-void RipgrepCommand::search(const QString &term, const QString &dir, const QStringList &files)
+void RipgrepCommandPrivate::search(const QString &term, const QString &dir, const QStringList &files)
 {
     QStringList args;
-    if (m_options.wholeWord)
+    if (options.wholeWord)
         args << "--word-regexp";
-    if (m_options.caseSensitive)
+    if (options.caseSensitive)
         args << "--case-sensitive";
     else
         args << "--ignore-case";
-    if (!m_options.useRegex)
+    if (!options.useRegex)
         args << "--fixed-strings";
-    for (const auto &file : m_options.includeFiles)
+    for (const auto &file : options.includeFiles)
         args << "--glob" << file;
-    for (const auto &file : m_options.excludeFiles)
+    for (const auto &file : options.excludeFiles)
         args << "--glob" << QString("!%1").arg(file);
     args << "--json" << "--regexp" << term;
 
@@ -76,26 +90,31 @@ void RipgrepCommand::search(const QString &term, const QString &dir, const QStri
         return;
     }
 
-    if (m_process != nullptr) {
-        if (m_process->state() != QProcess::NotRunning) {
-            m_process->terminate();
-            m_process->waitForFinished();
+    if (process != nullptr) {
+        if (process->state() != QProcess::NotRunning) {
+            process->terminate();
+            process->waitForFinished();
         }
-        m_process->deleteLater();
+        process->deleteLater();
     }
-    m_process = new QProcess(this);
-    connect(m_process, &QProcess::readyReadStandardOutput, this, &RipgrepCommand::processReadOutput);
-    m_process->start("rg", args, QIODevice::ReadOnly);
+    process = new QProcess(q);
+    q->connect(process, &QProcess::readyReadStandardOutput, q, [this] {
+        while (process->canReadLine()) {
+            auto line = process->readLine();
+            parseMatch(line.trimmed());
+        }
+    });
+    process->start("rg", args, QIODevice::ReadOnly);
 }
 
 void RipgrepCommand::searchInDir(const QString &term, const QString &dir)
 {
-    search(term, dir, {});
+    d->search(term, dir, {});
 }
 
 void RipgrepCommand::searchInFiles(const QString &term, const QStringList &files)
 {
-    search(term, QString(), files);
+    d->search(term, QString(), files);
 }
 
 struct JsonResolutionError : public QException {
@@ -121,7 +140,7 @@ static QJsonValue resolveJson(const QJsonObject &root, const QStringList &args)
     return value;
 }
 
-void RipgrepCommand::parseMatch(const QByteArray &match)
+void RipgrepCommandPrivate::parseMatch(const QByteArray &match)
 {
     if (match.isEmpty())
         return;
@@ -135,7 +154,7 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
         auto data = resolveJson(root, {"data"}).toObject();
         if (type == "begin") {
             auto file = resolveJson(data, {"path", "text"}).toString();
-            emit matchFoundInFile(file);
+            emit q->matchFoundInFile(file);
         } else if (type == "match") {
             auto file = resolveJson(data, {"path", "text"}).toString();
             auto text = resolveJson(data, {"lines", "text"}).toString();
@@ -145,12 +164,12 @@ void RipgrepCommand::parseMatch(const QByteArray &match)
                 auto obj = v.toObject();
                 int start = resolveJson(obj, {"start"}).toInt();
                 int end = resolveJson(obj, {"end"}).toInt();
-                emit matchFound(file, text, line, start, end);
+                emit q->matchFound(file, text, line, start, end);
             }
         } else if (type == "summary") {
             int found = resolveJson(data, {"stats", "matches"}).toInt();
             qint64 nanos = resolveJson(data, {"elapsed_total", "nanos"}).toInteger();
-            emit searchFinished(found, nanos);
+            emit q->searchFinished(found, nanos);
         }
     } catch (JsonResolutionError &err) {
         qWarning() << "JSON Parse Error:" << err.message;

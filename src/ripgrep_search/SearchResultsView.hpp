@@ -1,11 +1,14 @@
 #include <QStandardItemModel>
 #include <QTreeView>
 
+class SearchResultsModelPrivate;
+
 class SearchResultsModel : public QStandardItemModel
 {
     Q_OBJECT
 public:
-    using QStandardItemModel::QStandardItemModel;
+    explicit SearchResultsModel(QObject *parent = nullptr);
+    ~SearchResultsModel();
     void clear();
 
 public slots:
@@ -13,7 +16,7 @@ public slots:
     void addMatched(const QString &file, const QString &text, int line, int start, int end);
 
 private:
-    QStandardItem *m_currentItem = nullptr;
+    const QScopedPointer<SearchResultsModelPrivate> d;
 };
 
 class SearchResultsView : public QTreeView

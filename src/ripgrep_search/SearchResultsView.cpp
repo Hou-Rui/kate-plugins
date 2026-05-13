@@ -133,9 +133,23 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     }
 }
 
+struct SearchResultsModelPrivate {
+    SearchResultsModel *q;
+    QStandardItem *currentItem = nullptr;
+};
+
+SearchResultsModel::SearchResultsModel(QObject *parent)
+    : QStandardItemModel(parent)
+    , d(new SearchResultsModelPrivate)
+{
+    d->q = this;
+}
+
+SearchResultsModel::~SearchResultsModel() = default;
+
 void SearchResultsModel::clear()
 {
-    m_currentItem = nullptr;
+    d->currentItem = nullptr;
     QStandardItemModel::clear();
 }
 
@@ -149,27 +163,29 @@ void SearchResultsModel::addMatchedFile(const QString &file)
 {
     auto icon = iconForFile(file);
     auto text = QFileInfo(file).fileName();
-    m_currentItem = new QStandardItem(icon, text);
-    m_currentItem->setData(file, Qt::ToolTipRole);
-    m_currentItem->setData(file, FileNameRole);
-    invisibleRootItem()->appendRow(m_currentItem);
+    d->currentItem = new QStandardItem(icon, text);
+    d->currentItem->setData(file, Qt::ToolTipRole);
+    d->currentItem->setData(file, FileNameRole);
+    invisibleRootItem()->appendRow(d->currentItem);
 }
 
 void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
 {
-    if (m_currentItem == nullptr)
+    if (d->currentItem == nullptr)
         return;
     auto resultItem = new QStandardItem(text);
+    // clang-format: off
     auto tooltip = tr("%1<hr/>%2<br/>line %3, column %4 to %5")
         .arg(text.trimmed().toHtmlEscaped())
         .arg(file.toHtmlEscaped())
         .arg(line).arg(start + 1).arg(end + 1);
+    // clang-format: on
     resultItem->setData(tooltip, Qt::ToolTipRole);
     resultItem->setData(file, FileNameRole);
     resultItem->setData(line, LineNumberRole);
     resultItem->setData(start, StartColumnRole);
     resultItem->setData(end, EndColumnRole);
-    m_currentItem->appendRow(resultItem);
+    d->currentItem->appendRow(resultItem);
 }
 
 #include "SearchResultsView.moc"

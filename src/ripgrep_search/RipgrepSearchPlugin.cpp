@@ -8,14 +8,21 @@
 
 K_PLUGIN_CLASS_WITH_JSON(RipgrepSearchPlugin, "kate_ripgrep_search.json")
 
+struct RipgrepSearchPluginPrivate {
+    RipgrepSearchPlugin *q;
+    QList<RipgrepSearchView *> views;
+};
+
 RipgrepSearchPlugin::RipgrepSearchPlugin(QObject *parent)
     : KTextEditor::Plugin(parent)
+    , d(new RipgrepSearchPluginPrivate)
 {
+    d->q = this;
 }
 
 RipgrepSearchPlugin::~RipgrepSearchPlugin()
 {
-    for (auto view : m_views) {
+    for (auto view : d->views) {
         view->deleteLater();
     }
 }
@@ -24,9 +31,9 @@ QObject *RipgrepSearchPlugin::createView(KTextEditor::MainWindow *mainWindow)
 {
     auto view = new RipgrepSearchView(this, mainWindow);
     connect(view, &RipgrepSearchView::destroyed, [this](QObject *view) {
-        m_views.removeAll(static_cast<RipgrepSearchView *>(view));
+        d->views.removeAll(static_cast<RipgrepSearchView *>(view));
     });
-    m_views.append(view);
+    d->views.append(view);
     return view;
 }
 
