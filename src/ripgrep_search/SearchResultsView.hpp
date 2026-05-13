@@ -6,13 +6,14 @@ class SearchResultsModel : public QStandardItemModel
     Q_OBJECT
 public:
     using QStandardItemModel::QStandardItemModel;
+    void clear();
 
 public slots:
     void addMatchedFile(const QString &file);
     void addMatched(const QString &file, const QString &text, int line, int start, int end);
 
 private:
-    QStandardItem *m_currentItem;
+    QStandardItem *m_currentItem = nullptr;
 };
 
 class SearchResultsView : public QTreeView

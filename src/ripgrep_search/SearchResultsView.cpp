@@ -133,6 +133,12 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     }
 }
 
+void SearchResultsModel::clear()
+{
+    m_currentItem = nullptr;
+    QStandardItemModel::clear();
+}
+
 static inline QIcon iconForFile(const QString &filePath)
 {
     KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);
@@ -151,6 +157,8 @@ void SearchResultsModel::addMatchedFile(const QString &file)
 
 void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
 {
+    if (m_currentItem == nullptr)
+        return;
     auto resultItem = new QStandardItem(text);
     auto tooltip = tr("%1<hr/>%2<br/>line %3, column %4 to %5")
         .arg(text.trimmed().toHtmlEscaped())
