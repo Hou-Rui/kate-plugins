@@ -1,6 +1,5 @@
 #include "SearchResultsView.hpp"
-
-#include <KFileItem>
+#include "SearchResultsModel.hpp"
 
 #include <QApplication>
 #include <QFileInfo>
@@ -10,13 +9,6 @@
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
-
-enum ItemDataRole {
-    FileNameRole = Qt::UserRole,
-    LineNumberRole,
-    StartColumnRole,
-    EndColumnRole,
-};
 
 class SearchResultDelegate : public QStyledItemDelegate
 {
@@ -28,7 +20,7 @@ public:
 
 static inline bool isMatchedLine(const QModelIndex &index)
 {
-    auto role = index.data(LineNumberRole);
+    auto role = index.data(SearchResultsModel::LineNumberRole);
     return role.isValid() && role.canConvert<int>();
 }
 
@@ -74,8 +66,8 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
         icon.paint(painter, iconRect, Qt::AlignCenter);
 
     const auto &[trimmed, text] = trimLeft(index.data(Qt::DisplayRole).toString());
-    int start = index.data(StartColumnRole).toInt() - trimmed;
-    int end = index.data(EndColumnRole).toInt() - trimmed;
+    int start = index.data(SearchResultsModel::StartColumnRole).toInt() - trimmed;
+    int end = index.data(SearchResultsModel::EndColumnRole).toInt() - trimmed;
 
     QTextLayout layout(text, opt.font);
     if (isMatchedLine(index)) {
@@ -122,70 +114,15 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     if (index.parent() == rootIndex())
         expand(index);
 
-    auto file = index.data(FileNameRole).toString();
+    auto file = index.data(SearchResultsModel::FileNameRole).toString();
     if (isMatchedLine(index)) {
-        auto line = index.data(LineNumberRole).toInt();
-        auto start = index.data(StartColumnRole).toInt();
-        auto end = index.data(EndColumnRole).toInt();
+        auto line = index.data(SearchResultsModel::LineNumberRole).toInt();
+        auto start = index.data(SearchResultsModel::StartColumnRole).toInt();
+        auto end = index.data(SearchResultsModel::EndColumnRole).toInt();
         emit jumpToResult(file, line, start, end);
     } else {
         emit jumpToFile(file);
     }
-}
-
-struct SearchResultsModelPrivate {
-    SearchResultsModel *q;
-    QStandardItem *currentItem = nullptr;
-};
-
-SearchResultsModel::SearchResultsModel(QObject *parent)
-    : QStandardItemModel(parent)
-    , d(new SearchResultsModelPrivate)
-{
-    d->q = this;
-}
-
-SearchResultsModel::~SearchResultsModel() = default;
-
-void SearchResultsModel::clear()
-{
-    d->currentItem = nullptr;
-    QStandardItemModel::clear();
-}
-
-static inline QIcon iconForFile(const QString &filePath)
-{
-    KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);
-    return QIcon::fromTheme(item.iconName());
-}
-
-void SearchResultsModel::addMatchedFile(const QString &file)
-{
-    auto icon = iconForFile(file);
-    auto text = QFileInfo(file).fileName();
-    d->currentItem = new QStandardItem(icon, text);
-    d->currentItem->setData(file, Qt::ToolTipRole);
-    d->currentItem->setData(file, FileNameRole);
-    invisibleRootItem()->appendRow(d->currentItem);
-}
-
-void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
-{
-    if (d->currentItem == nullptr)
-        return;
-    auto resultItem = new QStandardItem(text);
-    // clang-format: off
-    auto tooltip = tr("%1<hr/>%2<br/>line %3, column %4 to %5")
-        .arg(text.trimmed().toHtmlEscaped())
-        .arg(file.toHtmlEscaped())
-        .arg(line).arg(start + 1).arg(end + 1);
-    // clang-format: on
-    resultItem->setData(tooltip, Qt::ToolTipRole);
-    resultItem->setData(file, FileNameRole);
-    resultItem->setData(line, LineNumberRole);
-    resultItem->setData(start, StartColumnRole);
-    resultItem->setData(end, EndColumnRole);
-    d->currentItem->appendRow(resultItem);
 }
 
 #include "SearchResultsView.moc"

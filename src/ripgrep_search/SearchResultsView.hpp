@@ -1,23 +1,7 @@
-#include <QStandardItemModel>
+#pragma once
 #include <QTreeView>
 
-class SearchResultsModelPrivate;
-
-class SearchResultsModel : public QStandardItemModel
-{
-    Q_OBJECT
-public:
-    explicit SearchResultsModel(QObject *parent = nullptr);
-    ~SearchResultsModel();
-    void clear();
-
-public slots:
-    void addMatchedFile(const QString &file);
-    void addMatched(const QString &file, const QString &text, int line, int start, int end);
-
-private:
-    const QScopedPointer<SearchResultsModelPrivate> d;
-};
+class SearchResultsModel;
 
 class SearchResultsView : public QTreeView
 {

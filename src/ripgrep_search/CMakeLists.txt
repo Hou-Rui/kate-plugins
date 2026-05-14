@@ -9,6 +9,7 @@ target_sources(${plugin_name} PRIVATE
     RipgrepCommand.cpp
     RipgrepSearchPlugin.cpp
     RipgrepSearchView.cpp
+    SearchResultsModel.cpp
     SearchResultsView.cpp
     ${plugin_resources_qrc}
 )

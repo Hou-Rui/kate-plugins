@@ -2,10 +2,9 @@
 #include "RipgrepCommand.hpp"
 #include "RipgrepSearchPlugin.hpp"
 #include "SearchResultsView.hpp"
+#include "SearchResultsModel.hpp"
 
 #include <KActionCollection>
-#include <KFileItem>
-#include <KPluginFactory>
 #include <KTextEditor/Document>
 #include <KTextEditor/Editor>
 #include <KTextEditor/MainWindow>
