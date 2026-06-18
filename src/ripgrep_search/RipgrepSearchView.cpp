@@ -22,7 +22,9 @@
 #include <QJsonObject>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMap>
 #include <QProcess>
+#include <QPushButton>
 #include <QSizePolicy>
 #include <QStatusBar>
 #include <QStyle>
@@ -43,10 +45,13 @@ public slots:
     void searchSelection();
     void resetStatusMessage();
     void clearResults();
+    void replaceAll();
+    void updateReplaceState();
 
 public:
     QString projectBaseDir();
     QStringList openedFiles();
+    KTextEditor::Document *documentForFile(const QString &file, bool *wasOpen);
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
     QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
     QComboBox *createEditableComboBox(const QString &placeholderText);
@@ -62,7 +67,10 @@ public:
     QAction *wholeWordAction = nullptr;
     QAction *caseSensitiveAction = nullptr;
     QAction *useRegexAction = nullptr;
+    QAction *showReplaceAction = nullptr;
     QAction *showAdvancedAction = nullptr;
+    QComboBox *replaceBox = nullptr;
+    QPushButton *replaceAllButton = nullptr;
     QComboBox *includeFileBox = nullptr;
     QComboBox *excludeFileBox = nullptr;
     SearchResultsModel *resultsModel = nullptr;
@@ -159,6 +167,8 @@ void RipgrepSearchViewPrivate::setupActions()
     useRegexAction = addCheckableAction("ripgrep_use_regex", "code-context", tr("Use regular expression"));
     connect(useRegexAction, &QAction::triggered, rg, &RipgrepCommand::setUseRegex);
 
+    showReplaceAction = addCheckableAction("ripgrep_show_replace", "edit-find-replace", tr("Show replace options"));
+
     showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
 
     mainWindow->guiFactory()->addClient(q);
@@ -188,6 +198,7 @@ void RipgrepSearchViewPrivate::setupUi()
     headerBar->addWidget(searchLabel);
     headerBar->addAction(refreshAction);
     headerBar->addAction(clearAction);
+    headerBar->addAction(showReplaceAction);
     headerBar->addAction(showAdvancedAction);
 
     auto searchBar = createToolBar(toolView);
@@ -196,6 +207,16 @@ void RipgrepSearchViewPrivate::setupUi()
     searchBar->addAction(wholeWordAction);
     searchBar->addAction(caseSensitiveAction);
     searchBar->addAction(useRegexAction);
+
+    auto replaceBar = createToolBar(toolView);
+    replaceBar->setVisible(false);
+    connect(showReplaceAction, &QAction::triggered, replaceBar, &QToolBar::setVisible);
+    replaceBox = createEditableComboBox(tr("Replace with"));
+    replaceBar->addWidget(replaceBox);
+    replaceAllButton = new QPushButton(QIcon::fromTheme("edit-find-replace"), tr("Replace All"));
+    replaceAllButton->setEnabled(false);
+    connect(replaceAllButton, &QPushButton::clicked, this, &RipgrepSearchViewPrivate::replaceAll);
+    replaceBar->addWidget(replaceAllButton);
 
     auto includeBar = createToolBar(toolView);
     includeBar->setVisible(false);
@@ -210,6 +231,9 @@ void RipgrepSearchViewPrivate::setupUi()
     filterForm->addRow(tr("Exclude:"), excludeFileBox);
 
     resultsModel = new SearchResultsModel(this);
+    connect(resultsModel, &QAbstractItemModel::rowsInserted, this, &RipgrepSearchViewPrivate::updateReplaceState);
+    connect(resultsModel, &QAbstractItemModel::rowsRemoved, this, &RipgrepSearchViewPrivate::updateReplaceState);
+    connect(resultsModel, &QAbstractItemModel::modelReset, this, &RipgrepSearchViewPrivate::updateReplaceState);
     resultsView = new SearchResultsView(resultsModel, toolView);
     resultsView->setHeaderHidden(true);
     resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
@@ -262,6 +286,74 @@ QStringList RipgrepSearchViewPrivate::openedFiles()
     return result;
 }
 
+KTextEditor::Document *RipgrepSearchViewPrivate::documentForFile(const QString &file, bool *wasOpen)
+{
+    auto editor = KTextEditor::Editor::instance();
+    auto url = QUrl::fromLocalFile(file);
+    for (auto doc : editor->documents()) {
+        if (doc->url() == url) {
+            if (wasOpen)
+                *wasOpen = true;
+            return doc;
+        }
+    }
+    if (wasOpen)
+        *wasOpen = false;
+    auto doc = editor->createDocument(nullptr);
+    if (!doc->openUrl(url)) {
+        doc->deleteLater();
+        return nullptr;
+    }
+    return doc;
+}
+
+void RipgrepSearchViewPrivate::updateReplaceState()
+{
+    if (replaceAllButton)
+        replaceAllButton->setEnabled(resultsModel && resultsModel->invisibleRootItem()->rowCount() > 0);
+}
+
+void RipgrepSearchViewPrivate::replaceAll()
+{
+    auto replacement = replaceBox->currentText();
+    auto targets = resultsModel->checkedResults();
+    if (targets.isEmpty()) {
+        statusBar->showMessage(tr("No results selected to replace."));
+        return;
+    }
+
+    // Group the selected matches per file so each document is touched once.
+    QMap<QString, QVector<ReplacementTarget>> byFile;
+    for (const auto &target : targets)
+        byFile[target.file].append(target);
+
+    int replaced = 0;
+    for (auto it = byFile.begin(); it != byFile.end(); ++it) {
+        // Apply matches bottom-up so earlier edits never shift later positions.
+        auto &matches = it.value();
+        std::sort(matches.begin(), matches.end(), [](const auto &a, const auto &b) {
+            return a.line != b.line ? a.line > b.line : a.start > b.start;
+        });
+
+        bool wasOpen = false;
+        auto doc = documentForFile(it.key(), &wasOpen);
+        if (!doc)
+            continue;
+
+        for (const auto &match : matches) {
+            int line = match.line - 1;
+            doc->replaceText(KTextEditor::Range(line, match.start, line, match.end), replacement);
+            replaced++;
+        }
+        doc->save();
+        if (!wasOpen)
+            doc->deleteLater();
+    }
+
+    statusBar->showMessage(tr("Replaced %1 occurrences.").arg(replaced));
+    startSearch();
+}
+
 inline static QStringList commaSeparated(const QString &line)
 {
     auto result = line.split(",", Qt::SkipEmptyParts);
@@ -308,6 +400,7 @@ void RipgrepSearchViewPrivate::searchSelection()
 void RipgrepSearchViewPrivate::clearResults()
 {
     searchBox->clear();
+    replaceBox->clear();
     includeFileBox->clear();
     excludeFileBox->clear();
     resultsModel->clear();

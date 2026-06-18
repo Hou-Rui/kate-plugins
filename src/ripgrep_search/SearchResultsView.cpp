@@ -6,6 +6,7 @@
 #include <QPainter>
 #include <QPalette>
 #include <QStandardItemModel>
+#include <QStyleOptionViewItem>
 #include <QStyledItemDelegate>
 #include <QTextLayout>
 #include <QTreeView>
@@ -60,6 +61,26 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     auto style = opt.widget ? opt.widget->style() : QApplication::style();
     style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
 
+    if (opt.features & QStyleOptionViewItem::HasCheckIndicator) {
+        auto checkRect = style->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, opt.widget);
+        QStyleOptionViewItem checkOpt = opt;
+        checkOpt.rect = checkRect;
+        checkOpt.state = checkOpt.state & ~QStyle::State_HasFocus;
+        switch (opt.checkState) {
+        case Qt::Checked:
+            checkOpt.state |= QStyle::State_On;
+            break;
+        case Qt::PartiallyChecked:
+            checkOpt.state |= QStyle::State_NoChange;
+            break;
+        case Qt::Unchecked:
+        default:
+            checkOpt.state |= QStyle::State_Off;
+            break;
+        }
+        style->drawPrimitive(QStyle::PE_IndicatorItemViewItemCheck, &checkOpt, painter, opt.widget);
+    }
+
     auto icon = index.data(Qt::DecorationRole).value<QIcon>();
     auto iconRect = style->subElementRect(QStyle::SE_ItemViewItemDecoration, &opt, opt.widget);
     if (!icon.isNull())
@@ -101,8 +122,31 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
     });
 }
 
+QRect SearchResultsView::checkBoxRect(const QModelIndex &index) const
+{
+    if (!(index.flags() & Qt::ItemIsUserCheckable))
+        return QRect();
+    QStyleOptionViewItem opt;
+    opt.initFrom(this);
+    opt.rect = visualRect(index);
+    opt.features |= QStyleOptionViewItem::HasCheckIndicator;
+    opt.decorationSize = iconSize();
+    return style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, this);
+}
+
 void SearchResultsView::mousePressEvent(QMouseEvent *event)
 {
+    if (event->button() == Qt::LeftButton) {
+        auto index = indexAt(event->pos());
+        if (index.isValid() && checkBoxRect(index).contains(event->pos())) {
+            // Toggle the result's inclusion without jumping to it.
+            auto state = index.data(Qt::CheckStateRole).toInt();
+            auto next = state == Qt::Checked ? Qt::Unchecked : Qt::Checked;
+            model()->setData(index, next, Qt::CheckStateRole);
+            return;
+        }
+    }
+
     QTreeView::mousePressEvent(event);
     if (event->button() != Qt::LeftButton)
         return;

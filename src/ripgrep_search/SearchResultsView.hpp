@@ -15,4 +15,7 @@ signals:
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;
+
+private:
+    QRect checkBoxRect(const QModelIndex &index) const;
 };

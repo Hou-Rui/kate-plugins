@@ -1,7 +1,15 @@
 #pragma once
 #include <QStandardItemModel>
+#include <QVector>
 
 class SearchResultsModelPrivate;
+
+struct ReplacementTarget {
+    QString file;
+    int line;
+    int start;
+    int end;
+};
 
 class SearchResultsModel : public QStandardItemModel
 {
@@ -17,6 +25,8 @@ public:
     explicit SearchResultsModel(QObject *parent = nullptr);
     ~SearchResultsModel();
     void clear();
+
+    QVector<ReplacementTarget> checkedResults() const;
 
 public slots:
     void addMatchedFile(const QString &file);

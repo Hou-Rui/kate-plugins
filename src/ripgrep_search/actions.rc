@@ -11,6 +11,7 @@
       <Action name="ripgrep_whole_word"/>
       <Action name="ripgrep_case_sensitive"/>
       <Action name="ripgrep_use_regex"/>
+      <Action name="ripgrep_show_replace"/>
       <Action name="ripgrep_show_advanced"/>
     </Menu>
   </MenuBar>
