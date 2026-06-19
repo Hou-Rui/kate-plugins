@@ -1,8 +1,8 @@
 #include "RipgrepSearchView.hpp"
 #include "RipgrepCommand.hpp"
 #include "RipgrepSearchPlugin.hpp"
-#include "SearchResultsView.hpp"
 #include "SearchResultsModel.hpp"
+#include "SearchResultsView.hpp"
 
 #include <KActionCollection>
 #include <KTextEditor/Document>
@@ -26,6 +26,8 @@
 #include <QProcess>
 #include <QPushButton>
 #include <QSizePolicy>
+#include <QStackedWidget>
+#include <QStandardPaths>
 #include <QStatusBar>
 #include <QStyle>
 #include <QStyledItemDelegate>
@@ -55,9 +57,12 @@ public:
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
     QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
     QComboBox *createEditableComboBox(const QString &placeholderText);
+    QWidget *createPlaceholder();
+    bool ripgrepAvailable();
 
     RipgrepSearchView *q;
     RipgrepSearchPlugin *plugin = nullptr;
+    bool rgAvailable = true;
     KTextEditor::MainWindow *mainWindow = nullptr;
     QWidget *toolView = nullptr;
     QComboBox *searchBox = nullptr;
@@ -171,6 +176,14 @@ void RipgrepSearchViewPrivate::setupActions()
 
     showAdvancedAction = addCheckableAction("ripgrep_show_advanced", "overflow-menu", tr("Show advanced options"));
 
+    // Without rg there is nothing the actions (and their shortcuts) can do, so
+    // disable them all; the tool view shows a placeholder explaining why.
+    rgAvailable = ripgrepAvailable();
+    if (!rgAvailable) {
+        for (auto action : q->actionCollection()->actions())
+            action->setEnabled(false);
+    }
+
     mainWindow->guiFactory()->addClient(q);
 }
 
@@ -192,7 +205,15 @@ void RipgrepSearchViewPrivate::setupUi()
                                               QIcon::fromTheme("search"), tr("Ripgrep Search"));
     // clang-format on
 
-    auto headerBar = createToolBar(toolView);
+    // The search UI and the "rg not found" notice live on two pages of a stack;
+    // only one is ever shown depending on whether ripgrep is on PATH.
+    auto contentStack = new QStackedWidget(toolView);
+    auto searchPage = new QWidget();
+    auto pageLayout = new QVBoxLayout(searchPage);
+    pageLayout->setContentsMargins(0, 0, 0, 0);
+    pageLayout->setSpacing(0);
+
+    auto headerBar = createToolBar(searchPage);
     auto searchLabel = new QLabel(tr("<b>Search</b>"));
     searchLabel->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred));
     headerBar->addWidget(searchLabel);
@@ -200,16 +221,19 @@ void RipgrepSearchViewPrivate::setupUi()
     headerBar->addAction(clearAction);
     headerBar->addAction(showReplaceAction);
     headerBar->addAction(showAdvancedAction);
+    pageLayout->addWidget(headerBar);
 
-    auto searchBar = createToolBar(toolView);
+    auto searchBar = createToolBar(searchPage);
     searchBox = createEditableComboBox(tr("Search (⇵ for history)"));
     searchBar->addWidget(searchBox);
     searchBar->addAction(wholeWordAction);
     searchBar->addAction(caseSensitiveAction);
     searchBar->addAction(useRegexAction);
+    pageLayout->addWidget(searchBar);
 
-    auto replaceBar = createToolBar(toolView);
+    auto replaceBar = createToolBar(searchPage);
     replaceBar->setVisible(false);
+    pageLayout->addWidget(replaceBar);
     connect(showReplaceAction, &QAction::triggered, replaceBar, &QToolBar::setVisible);
     replaceBox = createEditableComboBox(tr("Replace with"));
     replaceBar->addWidget(replaceBox);
@@ -218,8 +242,9 @@ void RipgrepSearchViewPrivate::setupUi()
     connect(replaceAllButton, &QPushButton::clicked, this, &RipgrepSearchViewPrivate::replaceAll);
     replaceBar->addWidget(replaceAllButton);
 
-    auto includeBar = createToolBar(toolView);
+    auto includeBar = createToolBar(searchPage);
     includeBar->setVisible(false);
+    pageLayout->addWidget(includeBar);
     connect(showAdvancedAction, &QAction::triggered, includeBar, &QToolBar::setVisible);
     auto filterContainer = new QWidget();
     includeBar->addWidget(filterContainer);
@@ -234,7 +259,8 @@ void RipgrepSearchViewPrivate::setupUi()
     connect(resultsModel, &QAbstractItemModel::rowsInserted, this, &RipgrepSearchViewPrivate::updateReplaceState);
     connect(resultsModel, &QAbstractItemModel::rowsRemoved, this, &RipgrepSearchViewPrivate::updateReplaceState);
     connect(resultsModel, &QAbstractItemModel::modelReset, this, &RipgrepSearchViewPrivate::updateReplaceState);
-    resultsView = new SearchResultsView(resultsModel, toolView);
+    resultsView = new SearchResultsView(resultsModel, searchPage);
+    pageLayout->addWidget(resultsView);
     resultsView->setHeaderHidden(true);
     resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
     resultsView->setShowCheckboxes(showReplaceAction->isChecked());
@@ -250,8 +276,42 @@ void RipgrepSearchViewPrivate::setupUi()
         }
     });
 
-    statusBar = new QStatusBar(toolView);
+    statusBar = new QStatusBar(searchPage);
+    pageLayout->addWidget(statusBar);
     resetStatusMessage();
+
+    contentStack->addWidget(searchPage);
+    contentStack->addWidget(createPlaceholder());
+    contentStack->setCurrentIndex(rgAvailable ? 0 : 1);
+}
+
+bool RipgrepSearchViewPrivate::ripgrepAvailable()
+{
+    return !QStandardPaths::findExecutable(QStringLiteral("rg")).isEmpty();
+}
+
+QWidget *RipgrepSearchViewPrivate::createPlaceholder()
+{
+    auto placeholder = new QWidget();
+    auto layout = new QVBoxLayout(placeholder);
+    layout->setAlignment(Qt::AlignCenter);
+
+    auto iconLabel = new QLabel();
+    iconLabel->setAlignment(Qt::AlignCenter);
+    iconLabel->setPixmap(QIcon::fromTheme("dialog-warning").pixmap(64, 64));
+
+    // clang-format off
+    auto textLabel = new QLabel(tr("<b>ripgrep is not available</b><br/><br/>"
+                                   "The <tt>rg</tt> command could not be found on your PATH.<br/>"
+                                   "Please install ripgrep to use this plugin."));
+    // clang-format on
+    textLabel->setAlignment(Qt::AlignCenter);
+    textLabel->setWordWrap(true);
+    textLabel->setTextFormat(Qt::RichText);
+
+    layout->addWidget(iconLabel);
+    layout->addWidget(textLabel);
+    return placeholder;
 }
 
 void RipgrepSearchViewPrivate::setupRipgrepProcess()
