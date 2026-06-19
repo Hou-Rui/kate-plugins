@@ -125,6 +125,16 @@ struct JsonResolutionError : public QException {
     }
 };
 
+// Ripgrep reports submatch offsets as UTF-8 byte offsets, but KTextEditor
+// cursors and ranges use character (UTF-16 code unit) offsets. These diverge
+// whenever the line contains multi-byte characters such as CJK text, so we map
+// a byte offset back to the corresponding character offset in the line.
+static int byteOffsetToCharOffset(const QByteArray &utf8Line, int byteOffset)
+{
+    byteOffset = qBound(0, byteOffset, utf8Line.size());
+    return QString::fromUtf8(utf8Line.constData(), byteOffset).size();
+}
+
 static QJsonValue resolveJson(const QJsonObject &root, const QStringList &args)
 {
     Q_ASSERT(args.size() > 0);
@@ -158,12 +168,13 @@ void RipgrepCommandPrivate::parseMatch(const QByteArray &match)
         } else if (type == "match") {
             auto file = resolveJson(data, {"path", "text"}).toString();
             auto text = resolveJson(data, {"lines", "text"}).toString();
+            auto utf8Line = text.toUtf8();
             auto line = resolveJson(data, {"line_number"}).toInt();
             auto submatches = resolveJson(data, {"submatches"}).toArray();
             for (auto v : submatches) {
                 auto obj = v.toObject();
-                int start = resolveJson(obj, {"start"}).toInt();
-                int end = resolveJson(obj, {"end"}).toInt();
+                int start = byteOffsetToCharOffset(utf8Line, resolveJson(obj, {"start"}).toInt());
+                int end = byteOffsetToCharOffset(utf8Line, resolveJson(obj, {"end"}).toInt());
                 emit q->matchFound(file, text, line, start, end);
             }
         } else if (type == "summary") {
