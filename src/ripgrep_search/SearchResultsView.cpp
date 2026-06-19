@@ -15,6 +15,35 @@
 #include <QTextLayout>
 #include <QTreeView>
 
+class SearchResultsViewPrivate : public QObject
+{
+    Q_OBJECT
+public slots:
+    void jumpToCurrentResult();
+    void jumpToCurrentFile();
+    void expandCurrentFile();
+    void collapseCurrentFile();
+
+public:
+    QRect checkBoxRect(const QModelIndex &index) const;
+    void createActions();
+    void jumpTo(const QModelIndex &index);
+    QModelIndex fileIndexFor(const QModelIndex &index) const;
+
+    SearchResultsView *q;
+    bool showCheckboxes = false;
+
+    QAction *selectAllAction = nullptr;
+    QAction *deselectAllAction = nullptr;
+    QAction *invertSelectionAction = nullptr;
+    QAction *jumpToResultAction = nullptr;
+    QAction *jumpToFileAction = nullptr;
+    QAction *expandFileAction = nullptr;
+    QAction *collapseFileAction = nullptr;
+    QAction *expandAllAction = nullptr;
+    QAction *collapseAllAction = nullptr;
+};
+
 class SearchResultDelegate : public QStyledItemDelegate
 {
     Q_OBJECT
@@ -119,7 +148,11 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
 
 SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
     : QTreeView(parent)
+    , d(new SearchResultsViewPrivate)
 {
+    d->moveToThread(thread());
+    d->q = this;
+
     setModel(model);
     setItemDelegate(new SearchResultDelegate(this));
     setWordWrap(false);
@@ -131,89 +164,91 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
         expand(parent);
     });
 
-    createActions();
+    d->createActions();
 }
 
-void SearchResultsView::createActions()
+SearchResultsView::~SearchResultsView() = default;
+
+void SearchResultsViewPrivate::createActions()
 {
-    auto selectionModel = qobject_cast<SearchResultsModel *>(model());
+    auto selectionModel = qobject_cast<SearchResultsModel *>(q->model());
 
-    m_selectAllAction = new QAction(QIcon::fromTheme("edit-select-all"), tr("Select All"), this);
-    m_selectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
-    connect(m_selectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::selectAll);
+    selectAllAction = new QAction(QIcon::fromTheme("edit-select-all"), tr("Select All"), q);
+    selectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
+    connect(selectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::selectAll);
 
-    m_deselectAllAction = new QAction(QIcon::fromTheme("edit-select-none"), tr("De-select All"), this);
-    m_deselectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
-    connect(m_deselectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::deselectAll);
+    deselectAllAction = new QAction(QIcon::fromTheme("edit-select-none"), tr("De-select All"), q);
+    deselectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+    connect(deselectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::deselectAll);
 
-    m_invertSelectionAction = new QAction(tr("Invert Selection"), this);
-    m_invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
-    connect(m_invertSelectionAction, &QAction::triggered, selectionModel, &SearchResultsModel::invertSelection);
+    invertSelectionAction = new QAction(tr("Invert Selection"), q);
+    invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
+    connect(invertSelectionAction, &QAction::triggered, selectionModel, &SearchResultsModel::invertSelection);
 
-    m_jumpToResultAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to Result"), this);
-    m_jumpToResultAction->setShortcut(QKeySequence(Qt::Key_Return));
-    connect(m_jumpToResultAction, &QAction::triggered, this, &SearchResultsView::jumpToCurrentResult);
+    jumpToResultAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to Result"), q);
+    jumpToResultAction->setShortcut(QKeySequence(Qt::Key_Return));
+    connect(jumpToResultAction, &QAction::triggered, this, &SearchResultsViewPrivate::jumpToCurrentResult);
 
-    m_jumpToFileAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to File"), this);
-    connect(m_jumpToFileAction, &QAction::triggered, this, &SearchResultsView::jumpToCurrentFile);
+    jumpToFileAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to File"), q);
+    connect(jumpToFileAction, &QAction::triggered, this, &SearchResultsViewPrivate::jumpToCurrentFile);
 
-    m_expandFileAction = new QAction(tr("Expand Results in File"), this);
-    m_expandFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
-    connect(m_expandFileAction, &QAction::triggered, this, &SearchResultsView::expandCurrentFile);
+    expandFileAction = new QAction(tr("Expand Results in File"), q);
+    expandFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
+    connect(expandFileAction, &QAction::triggered, this, &SearchResultsViewPrivate::expandCurrentFile);
 
-    m_collapseFileAction = new QAction(tr("Collapse Results in File"), this);
-    m_collapseFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
-    connect(m_collapseFileAction, &QAction::triggered, this, &SearchResultsView::collapseCurrentFile);
+    collapseFileAction = new QAction(tr("Collapse Results in File"), q);
+    collapseFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
+    connect(collapseFileAction, &QAction::triggered, this, &SearchResultsViewPrivate::collapseCurrentFile);
 
-    m_expandAllAction = new QAction(tr("Expand All"), this);
-    m_expandAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus));
-    connect(m_expandAllAction, &QAction::triggered, this, &QTreeView::expandAll);
+    expandAllAction = new QAction(tr("Expand All"), q);
+    expandAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus));
+    connect(expandAllAction, &QAction::triggered, q, &QTreeView::expandAll);
 
-    m_collapseAllAction = new QAction(tr("Collapse All"), this);
-    m_collapseAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus));
-    connect(m_collapseAllAction, &QAction::triggered, this, &QTreeView::collapseAll);
+    collapseAllAction = new QAction(tr("Collapse All"), q);
+    collapseAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus));
+    connect(collapseAllAction, &QAction::triggered, q, &QTreeView::collapseAll);
 
     // Register the actions on the view so their shortcuts fire while it has
     // focus, even when the context menu is not open.
-    const auto actions = {m_selectAllAction,    m_deselectAllAction, m_invertSelectionAction,
-                          m_jumpToResultAction, m_jumpToFileAction,  m_expandFileAction,
-                          m_collapseFileAction, m_expandAllAction,   m_collapseAllAction};
+    const auto actions = {selectAllAction,    deselectAllAction, invertSelectionAction,
+                          jumpToResultAction, jumpToFileAction,  expandFileAction,
+                          collapseFileAction, expandAllAction,   collapseAllAction};
     for (auto action : actions) {
         action->setShortcutContext(Qt::WidgetShortcut);
-        addAction(action);
+        q->addAction(action);
     }
 }
 
 bool SearchResultsView::showCheckboxes() const
 {
-    return m_showCheckboxes;
+    return d->showCheckboxes;
 }
 
 void SearchResultsView::setShowCheckboxes(bool show)
 {
-    if (m_showCheckboxes == show)
+    if (d->showCheckboxes == show)
         return;
-    m_showCheckboxes = show;
+    d->showCheckboxes = show;
     viewport()->update();
 }
 
-QRect SearchResultsView::checkBoxRect(const QModelIndex &index) const
+QRect SearchResultsViewPrivate::checkBoxRect(const QModelIndex &index) const
 {
-    if (!m_showCheckboxes || !(index.flags() & Qt::ItemIsUserCheckable))
+    if (!showCheckboxes || !(index.flags() & Qt::ItemIsUserCheckable))
         return QRect();
     QStyleOptionViewItem opt;
-    opt.initFrom(this);
-    opt.rect = visualRect(index);
+    opt.initFrom(q);
+    opt.rect = q->visualRect(index);
     opt.features |= QStyleOptionViewItem::HasCheckIndicator;
-    opt.decorationSize = iconSize();
-    return style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, this);
+    opt.decorationSize = q->iconSize();
+    return q->style()->subElementRect(QStyle::SE_ItemViewItemCheckIndicator, &opt, q);
 }
 
 void SearchResultsView::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() == Qt::LeftButton) {
         auto index = indexAt(event->pos());
-        if (index.isValid() && checkBoxRect(index).contains(event->pos())) {
+        if (index.isValid() && d->checkBoxRect(index).contains(event->pos())) {
             // Toggle the result's inclusion without jumping to it.
             auto state = index.data(Qt::CheckStateRole).toInt();
             auto next = state == Qt::Checked ? Qt::Unchecked : Qt::Checked;
@@ -233,10 +268,10 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     if (index.parent() == rootIndex())
         expand(index);
 
-    jumpTo(index);
+    d->jumpTo(index);
 }
 
-void SearchResultsView::jumpTo(const QModelIndex &index)
+void SearchResultsViewPrivate::jumpTo(const QModelIndex &index)
 {
     if (!index.isValid())
         return;
@@ -246,40 +281,40 @@ void SearchResultsView::jumpTo(const QModelIndex &index)
         auto line = index.data(SearchResultsModel::LineNumberRole).toInt();
         auto start = index.data(SearchResultsModel::StartColumnRole).toInt();
         auto end = index.data(SearchResultsModel::EndColumnRole).toInt();
-        emit jumpToResult(file, line, start, end);
+        emit q->jumpToResult(file, line, start, end);
     } else {
-        emit jumpToFile(file);
+        emit q->jumpToFile(file);
     }
 }
 
-QModelIndex SearchResultsView::fileIndexFor(const QModelIndex &index) const
+QModelIndex SearchResultsViewPrivate::fileIndexFor(const QModelIndex &index) const
 {
     if (!index.isValid())
         return QModelIndex();
     return isMatchedLine(index) ? index.parent() : index;
 }
 
-void SearchResultsView::jumpToCurrentResult()
+void SearchResultsViewPrivate::jumpToCurrentResult()
 {
-    jumpTo(currentIndex());
+    jumpTo(q->currentIndex());
 }
 
-void SearchResultsView::jumpToCurrentFile()
+void SearchResultsViewPrivate::jumpToCurrentFile()
 {
     // Jumping to a file index (never a matched line) emits jumpToFile.
-    jumpTo(fileIndexFor(currentIndex()));
+    jumpTo(fileIndexFor(q->currentIndex()));
 }
 
-void SearchResultsView::expandCurrentFile()
+void SearchResultsViewPrivate::expandCurrentFile()
 {
-    if (auto file = fileIndexFor(currentIndex()); file.isValid())
-        expand(file);
+    if (auto file = fileIndexFor(q->currentIndex()); file.isValid())
+        q->expand(file);
 }
 
-void SearchResultsView::collapseCurrentFile()
+void SearchResultsViewPrivate::collapseCurrentFile()
 {
-    if (auto file = fileIndexFor(currentIndex()); file.isValid())
-        collapse(file);
+    if (auto file = fileIndexFor(q->currentIndex()); file.isValid())
+        q->collapse(file);
 }
 
 void SearchResultsView::contextMenuEvent(QContextMenuEvent *event)
@@ -290,34 +325,34 @@ void SearchResultsView::contextMenuEvent(QContextMenuEvent *event)
 
     auto current = currentIndex();
     bool hasResults = model() && model()->rowCount() > 0;
-    m_selectAllAction->setEnabled(hasResults);
-    m_deselectAllAction->setEnabled(hasResults);
-    m_invertSelectionAction->setEnabled(hasResults);
+    d->selectAllAction->setEnabled(hasResults);
+    d->deselectAllAction->setEnabled(hasResults);
+    d->invertSelectionAction->setEnabled(hasResults);
     bool onMatchedLine = isMatchedLine(current);
-    m_jumpToResultAction->setEnabled(onMatchedLine);
-    m_jumpToFileAction->setEnabled(current.isValid());
-    m_expandFileAction->setEnabled(current.isValid());
-    m_collapseFileAction->setEnabled(current.isValid());
-    m_expandAllAction->setEnabled(hasResults);
-    m_collapseAllAction->setEnabled(hasResults);
+    d->jumpToResultAction->setEnabled(onMatchedLine);
+    d->jumpToFileAction->setEnabled(current.isValid());
+    d->expandFileAction->setEnabled(current.isValid());
+    d->collapseFileAction->setEnabled(current.isValid());
+    d->expandAllAction->setEnabled(hasResults);
+    d->collapseAllAction->setEnabled(hasResults);
 
     QMenu menu(this);
     // The selection actions only make sense while the checkboxes are visible
     // (i.e. the replace options are shown), so omit them otherwise.
-    if (m_showCheckboxes) {
-        menu.addAction(m_selectAllAction);
-        menu.addAction(m_deselectAllAction);
-        menu.addAction(m_invertSelectionAction);
+    if (d->showCheckboxes) {
+        menu.addAction(d->selectAllAction);
+        menu.addAction(d->deselectAllAction);
+        menu.addAction(d->invertSelectionAction);
         menu.addSeparator();
     }
     // On a result line, offer "Jump to Result"; on a file item, "Jump to File".
-    menu.addAction(onMatchedLine ? m_jumpToResultAction : m_jumpToFileAction);
+    menu.addAction(onMatchedLine ? d->jumpToResultAction : d->jumpToFileAction);
     menu.addSeparator();
-    menu.addAction(m_expandFileAction);
-    menu.addAction(m_collapseFileAction);
+    menu.addAction(d->expandFileAction);
+    menu.addAction(d->collapseFileAction);
     menu.addSeparator();
-    menu.addAction(m_expandAllAction);
-    menu.addAction(m_collapseAllAction);
+    menu.addAction(d->expandAllAction);
+    menu.addAction(d->collapseAllAction);
     menu.exec(event->globalPos());
 }
 
