@@ -32,6 +32,10 @@ public slots:
     void addMatchedFile(const QString &file);
     void addMatched(const QString &file, const QString &text, int line, int start, int end);
 
+    void selectAll();
+    void deselectAll();
+    void invertSelection();
+
 private:
     const QScopedPointer<SearchResultsModelPrivate> d;
 };

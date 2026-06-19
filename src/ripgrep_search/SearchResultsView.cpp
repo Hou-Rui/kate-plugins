@@ -1,8 +1,12 @@
 #include "SearchResultsView.hpp"
 #include "SearchResultsModel.hpp"
 
+#include <QAction>
 #include <QApplication>
+#include <QContextMenuEvent>
 #include <QFileInfo>
+#include <QKeySequence>
+#include <QMenu>
 #include <QPainter>
 #include <QPalette>
 #include <QStandardItemModel>
@@ -57,6 +61,12 @@ void SearchResultDelegate::paint(QPainter *painter, const QStyleOptionViewItem &
     QStyleOptionViewItem opt = option;
     initStyleOption(&opt, index);
     painter->save();
+
+    // Only reserve and draw the check indicator while the replace options are
+    // visible; otherwise the results read as a plain list.
+    auto view = qobject_cast<const SearchResultsView *>(opt.widget);
+    if (view && !view->showCheckboxes())
+        opt.features &= ~QStyleOptionViewItem::HasCheckIndicator;
 
     auto style = opt.widget ? opt.widget->style() : QApplication::style();
     style->drawPrimitive(QStyle::PE_PanelItemViewItem, &opt, painter, opt.widget);
@@ -120,11 +130,73 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
     connect(model, &SearchResultsModel::rowsInserted, [this](const QModelIndex &parent, auto, auto) {
         expand(parent);
     });
+
+    createActions();
+}
+
+void SearchResultsView::createActions()
+{
+    auto selectionModel = qobject_cast<SearchResultsModel *>(model());
+
+    m_selectAllAction = new QAction(QIcon::fromTheme("edit-select-all"), tr("Select All"), this);
+    m_selectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_A));
+    connect(m_selectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::selectAll);
+
+    m_deselectAllAction = new QAction(QIcon::fromTheme("edit-select-none"), tr("De-select All"), this);
+    m_deselectAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_A));
+    connect(m_deselectAllAction, &QAction::triggered, selectionModel, &SearchResultsModel::deselectAll);
+
+    m_invertSelectionAction = new QAction(tr("Invert Selection"), this);
+    m_invertSelectionAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_I));
+    connect(m_invertSelectionAction, &QAction::triggered, selectionModel, &SearchResultsModel::invertSelection);
+
+    m_jumpToResultAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to Result"), this);
+    m_jumpToResultAction->setShortcut(QKeySequence(Qt::Key_Return));
+    connect(m_jumpToResultAction, &QAction::triggered, this, &SearchResultsView::jumpToCurrentResult);
+
+    m_expandFileAction = new QAction(tr("Expand Results in File"), this);
+    m_expandFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
+    connect(m_expandFileAction, &QAction::triggered, this, &SearchResultsView::expandCurrentFile);
+
+    m_collapseFileAction = new QAction(tr("Collapse Results in File"), this);
+    m_collapseFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Left));
+    connect(m_collapseFileAction, &QAction::triggered, this, &SearchResultsView::collapseCurrentFile);
+
+    m_expandAllAction = new QAction(tr("Expand All"), this);
+    m_expandAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Plus));
+    connect(m_expandAllAction, &QAction::triggered, this, &QTreeView::expandAll);
+
+    m_collapseAllAction = new QAction(tr("Collapse All"), this);
+    m_collapseAllAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Minus));
+    connect(m_collapseAllAction, &QAction::triggered, this, &QTreeView::collapseAll);
+
+    // Register the actions on the view so their shortcuts fire while it has
+    // focus, even when the context menu is not open.
+    const auto actions = {m_selectAllAction,  m_deselectAllAction, m_invertSelectionAction,
+                          m_jumpToResultAction, m_expandFileAction,  m_collapseFileAction,
+                          m_expandAllAction,    m_collapseAllAction};
+    for (auto action : actions) {
+        action->setShortcutContext(Qt::WidgetShortcut);
+        addAction(action);
+    }
+}
+
+bool SearchResultsView::showCheckboxes() const
+{
+    return m_showCheckboxes;
+}
+
+void SearchResultsView::setShowCheckboxes(bool show)
+{
+    if (m_showCheckboxes == show)
+        return;
+    m_showCheckboxes = show;
+    viewport()->update();
 }
 
 QRect SearchResultsView::checkBoxRect(const QModelIndex &index) const
 {
-    if (!(index.flags() & Qt::ItemIsUserCheckable))
+    if (!m_showCheckboxes || !(index.flags() & Qt::ItemIsUserCheckable))
         return QRect();
     QStyleOptionViewItem opt;
     opt.initFrom(this);
@@ -158,6 +230,14 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     if (index.parent() == rootIndex())
         expand(index);
 
+    jumpTo(index);
+}
+
+void SearchResultsView::jumpTo(const QModelIndex &index)
+{
+    if (!index.isValid())
+        return;
+
     auto file = index.data(SearchResultsModel::FileNameRole).toString();
     if (isMatchedLine(index)) {
         auto line = index.data(SearchResultsModel::LineNumberRole).toInt();
@@ -167,6 +247,62 @@ void SearchResultsView::mousePressEvent(QMouseEvent *event)
     } else {
         emit jumpToFile(file);
     }
+}
+
+QModelIndex SearchResultsView::fileIndexFor(const QModelIndex &index) const
+{
+    if (!index.isValid())
+        return QModelIndex();
+    return isMatchedLine(index) ? index.parent() : index;
+}
+
+void SearchResultsView::jumpToCurrentResult()
+{
+    jumpTo(currentIndex());
+}
+
+void SearchResultsView::expandCurrentFile()
+{
+    if (auto file = fileIndexFor(currentIndex()); file.isValid())
+        expand(file);
+}
+
+void SearchResultsView::collapseCurrentFile()
+{
+    if (auto file = fileIndexFor(currentIndex()); file.isValid())
+        collapse(file);
+}
+
+void SearchResultsView::contextMenuEvent(QContextMenuEvent *event)
+{
+    // Make the right-clicked row current so the per-item actions target it.
+    if (auto index = indexAt(event->pos()); index.isValid())
+        setCurrentIndex(index);
+
+    auto current = currentIndex();
+    bool hasResults = model() && model()->rowCount() > 0;
+    m_selectAllAction->setEnabled(hasResults);
+    m_deselectAllAction->setEnabled(hasResults);
+    m_invertSelectionAction->setEnabled(hasResults);
+    m_jumpToResultAction->setEnabled(isMatchedLine(current));
+    m_expandFileAction->setEnabled(current.isValid());
+    m_collapseFileAction->setEnabled(current.isValid());
+    m_expandAllAction->setEnabled(hasResults);
+    m_collapseAllAction->setEnabled(hasResults);
+
+    QMenu menu(this);
+    menu.addAction(m_selectAllAction);
+    menu.addAction(m_deselectAllAction);
+    menu.addAction(m_invertSelectionAction);
+    menu.addSeparator();
+    menu.addAction(m_jumpToResultAction);
+    menu.addSeparator();
+    menu.addAction(m_expandFileAction);
+    menu.addAction(m_collapseFileAction);
+    menu.addSeparator();
+    menu.addAction(m_expandAllAction);
+    menu.addAction(m_collapseAllAction);
+    menu.exec(event->globalPos());
 }
 
 #include "SearchResultsView.moc"

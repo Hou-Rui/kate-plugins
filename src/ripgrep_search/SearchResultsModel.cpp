@@ -86,6 +86,35 @@ QVector<ReplacementTarget> SearchResultsModel::checkedResults() const
     return result;
 }
 
+void SearchResultsModel::selectAll()
+{
+    // Toggling a file item cascades to its result lines via onItemChanged().
+    auto root = invisibleRootItem();
+    for (int i = 0; i < root->rowCount(); ++i)
+        root->child(i)->setCheckState(Qt::Checked);
+}
+
+void SearchResultsModel::deselectAll()
+{
+    auto root = invisibleRootItem();
+    for (int i = 0; i < root->rowCount(); ++i)
+        root->child(i)->setCheckState(Qt::Unchecked);
+}
+
+void SearchResultsModel::invertSelection()
+{
+    // Flip each result line; the parent file tri-state is refreshed per change.
+    auto root = invisibleRootItem();
+    for (int i = 0; i < root->rowCount(); ++i) {
+        auto fileItem = root->child(i);
+        for (int j = 0; j < fileItem->rowCount(); ++j) {
+            auto item = fileItem->child(j);
+            auto next = item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked;
+            item->setCheckState(next);
+        }
+    }
+}
+
 static inline QIcon iconForFile(const QString &filePath)
 {
     KFileItem item(QUrl::fromLocalFile(filePath), QString(), KFileItem::Unknown);

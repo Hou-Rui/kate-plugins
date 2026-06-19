@@ -237,6 +237,8 @@ void RipgrepSearchViewPrivate::setupUi()
     resultsView = new SearchResultsView(resultsModel, toolView);
     resultsView->setHeaderHidden(true);
     resultsView->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
+    resultsView->setShowCheckboxes(showReplaceAction->isChecked());
+    connect(showReplaceAction, &QAction::toggled, resultsView, &SearchResultsView::setShowCheckboxes);
     connect(resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
         mainWindow->openUrl(QUrl::fromLocalFile(file));
     });
