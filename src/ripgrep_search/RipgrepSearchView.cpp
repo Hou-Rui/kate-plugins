@@ -17,6 +17,7 @@
 #include <QByteArray>
 #include <QComboBox>
 #include <QFileInfo>
+#include <QFileSystemWatcher>
 #include <QFormLayout>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -32,6 +33,7 @@
 #include <QStyle>
 #include <QStyledItemDelegate>
 #include <QTextStream>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVariantMap>
@@ -49,8 +51,12 @@ public slots:
     void clearResults();
     void replaceAll();
     void updateReplaceState();
+    void scheduleResearch();
+    void watchResultFile(const QString &file);
 
 public:
+    void clearWatches();
+
     QString projectBaseDir();
     QStringList openedFiles();
     KTextEditor::Document *documentForFile(const QString &file, bool *wasOpen);
@@ -82,6 +88,8 @@ public:
     SearchResultsView *resultsView = nullptr;
     QStatusBar *statusBar = nullptr;
     RipgrepCommand *rg = nullptr;
+    QFileSystemWatcher *fileWatcher = nullptr;
+    QTimer *researchTimer = nullptr;
 };
 
 RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow)
@@ -318,12 +326,45 @@ void RipgrepSearchViewPrivate::setupRipgrepProcess()
 {
     connect(rg, &RipgrepCommand::searchOptionsChanged, this, &RipgrepSearchViewPrivate::startSearch);
     connect(rg, &RipgrepCommand::matchFoundInFile, resultsModel, &SearchResultsModel::addMatchedFile);
+    connect(rg, &RipgrepCommand::matchFoundInFile, this, &RipgrepSearchViewPrivate::watchResultFile);
     connect(rg, &RipgrepCommand::matchFound, resultsModel, &SearchResultsModel::addMatched);
     connect(rg, &RipgrepCommand::searchFinished, [this](int found, qint64 nanos) {
         auto seconds = QString::number(nanos / 1000000000.0, 'f', 6);
         auto results = found == 1 ? tr("result") : tr("results");
         statusBar->showMessage(tr("Found %1 %2 in %3 seconds.").arg(found).arg(results).arg(seconds));
     });
+
+    // ripgrep only ever sees what is on disk, so the results drift out of sync
+    // the moment a matched file changes — whether Kate saves an edited document
+    // or some external tool rewrites it. Watch every file that produced a result
+    // and re-run the search when it changes on disk.
+    fileWatcher = new QFileSystemWatcher(this);
+    connect(fileWatcher, &QFileSystemWatcher::fileChanged, this, &RipgrepSearchViewPrivate::scheduleResearch);
+
+    // Coalesce bursts of notifications (atomic saves delete-and-recreate the
+    // file, firing several changes) into a single re-search.
+    researchTimer = new QTimer(this);
+    researchTimer->setSingleShot(true);
+    researchTimer->setInterval(300);
+    connect(researchTimer, &QTimer::timeout, this, &RipgrepSearchViewPrivate::startSearch);
+}
+
+void RipgrepSearchViewPrivate::watchResultFile(const QString &file)
+{
+    if (fileWatcher && !fileWatcher->files().contains(file))
+        fileWatcher->addPath(file);
+}
+
+void RipgrepSearchViewPrivate::clearWatches()
+{
+    if (fileWatcher && !fileWatcher->files().isEmpty())
+        fileWatcher->removePaths(fileWatcher->files());
+}
+
+void RipgrepSearchViewPrivate::scheduleResearch()
+{
+    if (rgAvailable && !searchBox->currentText().isEmpty())
+        researchTimer->start();
 }
 
 QString RipgrepSearchViewPrivate::projectBaseDir()
@@ -435,6 +476,12 @@ void RipgrepSearchViewPrivate::startSearch()
 
     QCoreApplication::removePostedEvents(resultsModel, QEvent::MetaCall);
 
+    // A pending debounced re-search is now subsumed by this run; the watch list
+    // is rebuilt as the fresh results stream back in via watchResultFile().
+    if (researchTimer)
+        researchTimer->stop();
+    clearWatches();
+
     statusBar->showMessage(tr("Searching..."));
     resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
@@ -465,6 +512,9 @@ void RipgrepSearchViewPrivate::clearResults()
     replaceBox->clear();
     includeFileBox->clear();
     excludeFileBox->clear();
+    if (researchTimer)
+        researchTimer->stop();
+    clearWatches();
     resultsModel->clear();
     resetStatusMessage();
 }
