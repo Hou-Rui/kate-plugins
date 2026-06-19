@@ -154,6 +154,9 @@ void SearchResultsView::createActions()
     m_jumpToResultAction->setShortcut(QKeySequence(Qt::Key_Return));
     connect(m_jumpToResultAction, &QAction::triggered, this, &SearchResultsView::jumpToCurrentResult);
 
+    m_jumpToFileAction = new QAction(QIcon::fromTheme("go-jump"), tr("Jump to File"), this);
+    connect(m_jumpToFileAction, &QAction::triggered, this, &SearchResultsView::jumpToCurrentFile);
+
     m_expandFileAction = new QAction(tr("Expand Results in File"), this);
     m_expandFileAction->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_Right));
     connect(m_expandFileAction, &QAction::triggered, this, &SearchResultsView::expandCurrentFile);
@@ -172,9 +175,9 @@ void SearchResultsView::createActions()
 
     // Register the actions on the view so their shortcuts fire while it has
     // focus, even when the context menu is not open.
-    const auto actions = {m_selectAllAction,  m_deselectAllAction, m_invertSelectionAction,
-                          m_jumpToResultAction, m_expandFileAction,  m_collapseFileAction,
-                          m_expandAllAction,    m_collapseAllAction};
+    const auto actions = {m_selectAllAction,    m_deselectAllAction, m_invertSelectionAction,
+                          m_jumpToResultAction, m_jumpToFileAction,  m_expandFileAction,
+                          m_collapseFileAction, m_expandAllAction,   m_collapseAllAction};
     for (auto action : actions) {
         action->setShortcutContext(Qt::WidgetShortcut);
         addAction(action);
@@ -261,6 +264,12 @@ void SearchResultsView::jumpToCurrentResult()
     jumpTo(currentIndex());
 }
 
+void SearchResultsView::jumpToCurrentFile()
+{
+    // Jumping to a file index (never a matched line) emits jumpToFile.
+    jumpTo(fileIndexFor(currentIndex()));
+}
+
 void SearchResultsView::expandCurrentFile()
 {
     if (auto file = fileIndexFor(currentIndex()); file.isValid())
@@ -284,18 +293,25 @@ void SearchResultsView::contextMenuEvent(QContextMenuEvent *event)
     m_selectAllAction->setEnabled(hasResults);
     m_deselectAllAction->setEnabled(hasResults);
     m_invertSelectionAction->setEnabled(hasResults);
-    m_jumpToResultAction->setEnabled(isMatchedLine(current));
+    bool onMatchedLine = isMatchedLine(current);
+    m_jumpToResultAction->setEnabled(onMatchedLine);
+    m_jumpToFileAction->setEnabled(current.isValid());
     m_expandFileAction->setEnabled(current.isValid());
     m_collapseFileAction->setEnabled(current.isValid());
     m_expandAllAction->setEnabled(hasResults);
     m_collapseAllAction->setEnabled(hasResults);
 
     QMenu menu(this);
-    menu.addAction(m_selectAllAction);
-    menu.addAction(m_deselectAllAction);
-    menu.addAction(m_invertSelectionAction);
-    menu.addSeparator();
-    menu.addAction(m_jumpToResultAction);
+    // The selection actions only make sense while the checkboxes are visible
+    // (i.e. the replace options are shown), so omit them otherwise.
+    if (m_showCheckboxes) {
+        menu.addAction(m_selectAllAction);
+        menu.addAction(m_deselectAllAction);
+        menu.addAction(m_invertSelectionAction);
+        menu.addSeparator();
+    }
+    // On a result line, offer "Jump to Result"; on a file item, "Jump to File".
+    menu.addAction(onMatchedLine ? m_jumpToResultAction : m_jumpToFileAction);
     menu.addSeparator();
     menu.addAction(m_expandFileAction);
     menu.addAction(m_collapseFileAction);

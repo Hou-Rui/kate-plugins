@@ -23,6 +23,7 @@ protected:
 
 private slots:
     void jumpToCurrentResult();
+    void jumpToCurrentFile();
     void expandCurrentFile();
     void collapseCurrentFile();
 
@@ -38,6 +39,7 @@ private:
     QAction *m_deselectAllAction = nullptr;
     QAction *m_invertSelectionAction = nullptr;
     QAction *m_jumpToResultAction = nullptr;
+    QAction *m_jumpToFileAction = nullptr;
     QAction *m_expandFileAction = nullptr;
     QAction *m_collapseFileAction = nullptr;
     QAction *m_expandAllAction = nullptr;
