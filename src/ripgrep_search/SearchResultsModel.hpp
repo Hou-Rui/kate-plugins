@@ -6,9 +6,8 @@ class SearchResultsModelPrivate;
 
 struct ReplacementTarget {
     QString file;
-    int line;
-    int start;
-    int end;
+    qint64 byteStart;
+    qint64 byteEnd;
 };
 
 class SearchResultsModel : public QStandardItemModel
@@ -20,6 +19,10 @@ public:
         LineNumberRole,
         StartColumnRole,
         EndColumnRole,
+        // Absolute UTF-8 byte offsets of the match in the file, used to derive
+        // the Kate cursor at navigation time (see RipgrepCommand::matchFound).
+        ByteStartRole,
+        ByteEndRole,
     };
 
     explicit SearchResultsModel(QObject *parent = nullptr);
@@ -30,7 +33,7 @@ public:
 
 public slots:
     void addMatchedFile(const QString &file);
-    void addMatched(const QString &file, const QString &text, int line, int start, int end);
+    void addMatched(const QString &file, const QString &text, int line, int start, int end, qint64 byteStart, qint64 byteEnd);
 
     void selectAll();
     void deselectAll();

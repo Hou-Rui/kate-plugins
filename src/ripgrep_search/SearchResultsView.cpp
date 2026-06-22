@@ -210,9 +210,15 @@ void SearchResultsViewPrivate::createActions()
 
     // Register the actions on the view so their shortcuts fire while it has
     // focus, even when the context menu is not open.
-    const auto actions = {selectAllAction,    deselectAllAction, invertSelectionAction,
-                          jumpToResultAction, jumpToFileAction,  expandFileAction,
-                          collapseFileAction, expandAllAction,   collapseAllAction};
+    const auto actions = {selectAllAction,
+                          deselectAllAction,
+                          invertSelectionAction,
+                          jumpToResultAction,
+                          jumpToFileAction,
+                          expandFileAction,
+                          collapseFileAction,
+                          expandAllAction,
+                          collapseAllAction};
     for (auto action : actions) {
         action->setShortcutContext(Qt::WidgetShortcut);
         q->addAction(action);
@@ -278,10 +284,9 @@ void SearchResultsViewPrivate::jumpTo(const QModelIndex &index)
 
     auto file = index.data(SearchResultsModel::FileNameRole).toString();
     if (isMatchedLine(index)) {
-        auto line = index.data(SearchResultsModel::LineNumberRole).toInt();
-        auto start = index.data(SearchResultsModel::StartColumnRole).toInt();
-        auto end = index.data(SearchResultsModel::EndColumnRole).toInt();
-        emit q->jumpToResult(file, line, start, end);
+        auto byteStart = index.data(SearchResultsModel::ByteStartRole).toLongLong();
+        auto byteEnd = index.data(SearchResultsModel::ByteEndRole).toLongLong();
+        emit q->jumpToResult(file, byteStart, byteEnd);
     } else {
         emit q->jumpToFile(file);
     }

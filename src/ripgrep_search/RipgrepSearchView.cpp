@@ -16,9 +16,11 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QComboBox>
+#include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
 #include <QFormLayout>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLabel>
@@ -37,6 +39,8 @@
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QVariantMap>
+
+#include <algorithm>
 
 class RipgrepSearchViewPrivate : public QObject
 {
@@ -59,6 +63,8 @@ public:
 
     QString projectBaseDir();
     QStringList openedFiles();
+    const QList<qint64> &lineStartsFor(const QString &file);
+    KTextEditor::Range mapToKate(const QString &file, qint64 byteStart, qint64 byteEnd, KTextEditor::Document *doc);
     KTextEditor::Document *documentForFile(const QString &file, bool *wasOpen);
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
     QAction *addCheckableAction(const QString &name, const QString &iconName, const QString &text);
@@ -90,6 +96,9 @@ public:
     RipgrepCommand *rg = nullptr;
     QFileSystemWatcher *fileWatcher = nullptr;
     QTimer *researchTimer = nullptr;
+    // Per-file cache of the byte offsets at which each Kate line begins, built
+    // lazily on first navigation into a file and dropped when a new search runs.
+    QHash<QString, QList<qint64>> lineStartCache;
 };
 
 RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow)
@@ -276,11 +285,11 @@ void RipgrepSearchViewPrivate::setupUi()
     connect(resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
         mainWindow->openUrl(QUrl::fromLocalFile(file));
     });
-    connect(resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, int line, int start, int end) {
+    connect(resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, qint64 byteStart, qint64 byteEnd) {
         if (auto view = mainWindow->openUrl(QUrl::fromLocalFile(file))) {
-            line--;
-            view->setCursorPosition(KTextEditor::Cursor(line, start));
-            view->setSelection(KTextEditor::Range(line, start, line, end));
+            auto range = mapToKate(file, byteStart, byteEnd, view->document());
+            view->setCursorPosition(range.start());
+            view->setSelection(range);
         }
     });
 
@@ -389,6 +398,59 @@ QStringList RipgrepSearchViewPrivate::openedFiles()
     return result;
 }
 
+// ripgrep counts line breaks on '\n' only, while Kate also breaks on a lone
+// '\r' (and on "\r\n"). Re-derive the byte offset of every Kate line start so a
+// match's absolute byte offset can be turned into the cursor Kate actually uses.
+// The scan reads the whole file once; the result is cached per file for the
+// lifetime of the current search.
+const QList<qint64> &RipgrepSearchViewPrivate::lineStartsFor(const QString &file)
+{
+    if (auto it = lineStartCache.constFind(file); it != lineStartCache.constEnd())
+        return it.value();
+
+    QList<qint64> starts{0};
+    QFile f(file);
+    if (f.open(QIODevice::ReadOnly)) {
+        const QByteArray bytes = f.readAll();
+        const int n = bytes.size();
+        for (int i = 0; i < n; ++i) {
+            const char c = bytes.at(i);
+            if (c == '\n') {
+                starts.append(i + 1);
+            } else if (c == '\r') {
+                if (i + 1 < n && bytes.at(i + 1) == '\n')
+                    ++i; // "\r\n" is a single Kate line break
+                starts.append(i + 1);
+            }
+        }
+    }
+    return lineStartCache.insert(file, std::move(starts)).value();
+}
+
+// Map a match's absolute byte range to the Kate range to select. The match is
+// kept on a single line: should it straddle a lone '\r' (one ripgrep line, but
+// several Kate lines) the selection is clamped to the end of its start line.
+KTextEditor::Range RipgrepSearchViewPrivate::mapToKate(const QString &file, qint64 byteStart, qint64 byteEnd, KTextEditor::Document *doc)
+{
+    const auto &starts = lineStartsFor(file);
+    auto lineOf = [&starts](qint64 offset) {
+        auto it = std::upper_bound(starts.cbegin(), starts.cend(), offset);
+        return std::max<int>(0, int(it - starts.cbegin()) - 1);
+    };
+    auto columnOf = [doc](int line, qint64 lineStart, qint64 offset) -> int {
+        if (line < 0 || line >= doc->lines())
+            return 0;
+        const QByteArray lineUtf8 = doc->line(line).toUtf8();
+        const qint64 byteInLine = qBound<qint64>(0, offset - lineStart, lineUtf8.size());
+        return int(QString::fromUtf8(lineUtf8.constData(), int(byteInLine)).size());
+    };
+
+    const int startLine = lineOf(byteStart);
+    const int startColumn = columnOf(startLine, starts.at(startLine), byteStart);
+    const int endColumn = lineOf(byteEnd) == startLine ? columnOf(startLine, starts.at(startLine), byteEnd) : doc->line(startLine).size();
+    return KTextEditor::Range(startLine, startColumn, startLine, endColumn);
+}
+
 KTextEditor::Document *RipgrepSearchViewPrivate::documentForFile(const QString &file, bool *wasOpen)
 {
     auto editor = KTextEditor::Editor::instance();
@@ -432,20 +494,25 @@ void RipgrepSearchViewPrivate::replaceAll()
 
     int replaced = 0;
     for (auto it = byFile.begin(); it != byFile.end(); ++it) {
-        // Apply matches bottom-up so earlier edits never shift later positions.
-        auto &matches = it.value();
-        std::sort(matches.begin(), matches.end(), [](const auto &a, const auto &b) {
-            return a.line != b.line ? a.line > b.line : a.start > b.start;
-        });
-
         bool wasOpen = false;
         auto doc = documentForFile(it.key(), &wasOpen);
         if (!doc)
             continue;
 
-        for (const auto &match : matches) {
-            int line = match.line - 1;
-            doc->replaceText(KTextEditor::Range(line, match.start, line, match.end), replacement);
+        // Resolve every match to a Kate range while the document is still
+        // pristine (mapToKate reads the unedited line text for its columns).
+        QVector<KTextEditor::Range> ranges;
+        ranges.reserve(it.value().size());
+        for (const auto &match : it.value())
+            ranges.append(mapToKate(it.key(), match.byteStart, match.byteEnd, doc));
+
+        // Apply matches bottom-up so earlier edits never shift later positions.
+        std::sort(ranges.begin(), ranges.end(), [](const auto &a, const auto &b) {
+            return a.start() > b.start();
+        });
+
+        for (const auto &range : ranges) {
+            doc->replaceText(range, replacement);
             replaced++;
         }
         doc->save();
@@ -481,6 +548,9 @@ void RipgrepSearchViewPrivate::startSearch()
     if (researchTimer)
         researchTimer->stop();
     clearWatches();
+    // Results are about to be rebuilt against the current on-disk contents, so
+    // any cached line-start maps (a file may have changed) are now stale.
+    lineStartCache.clear();
 
     statusBar->showMessage(tr("Searching..."));
     resultsModel->clear();
@@ -515,6 +585,7 @@ void RipgrepSearchViewPrivate::clearResults()
     if (researchTimer)
         researchTimer->stop();
     clearWatches();
+    lineStartCache.clear();
     resultsModel->clear();
     resetStatusMessage();
 }

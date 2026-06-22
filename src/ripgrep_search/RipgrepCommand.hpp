@@ -23,10 +23,14 @@ public slots:
 
 signals:
     void matchFoundInFile(const QString &file);
-    void matchFound(const QString &file, const QString &text, int line, int start, int end);
+    // line/start/end describe ripgrep's view of the match (used only for the
+    // result row's text and tooltip). byteStart/byteEnd are absolute UTF-8 byte
+    // offsets into the file; they are the source of truth for navigation, since
+    // ripgrep and Kate disagree on line boundaries when a lone '\r' is present.
+    void matchFound(const QString &file, const QString &text, int line, int start, int end, qint64 byteStart, qint64 byteEnd);
     void searchFinished(int found, qint64 nanos);
     void searchOptionsChanged();
-    
+
 private:
     const QScopedPointer<RipgrepCommandPrivate> d;
 };

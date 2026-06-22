@@ -170,12 +170,17 @@ void RipgrepCommandPrivate::parseMatch(const QByteArray &match)
             auto text = resolveJson(data, {"lines", "text"}).toString();
             auto utf8Line = text.toUtf8();
             auto line = resolveJson(data, {"line_number"}).toInt();
+            // Byte offset in the file of the start of this (ripgrep) line, so we
+            // can hand downstream the absolute byte position of each submatch.
+            qint64 absoluteOffset = data.value("absolute_offset").toInteger();
             auto submatches = resolveJson(data, {"submatches"}).toArray();
             for (auto v : submatches) {
                 auto obj = v.toObject();
-                int start = byteOffsetToCharOffset(utf8Line, resolveJson(obj, {"start"}).toInt());
-                int end = byteOffsetToCharOffset(utf8Line, resolveJson(obj, {"end"}).toInt());
-                emit q->matchFound(file, text, line, start, end);
+                int startByte = resolveJson(obj, {"start"}).toInt();
+                int endByte = resolveJson(obj, {"end"}).toInt();
+                int start = byteOffsetToCharOffset(utf8Line, startByte);
+                int end = byteOffsetToCharOffset(utf8Line, endByte);
+                emit q->matchFound(file, text, line, start, end, absoluteOffset + startByte, absoluteOffset + endByte);
             }
         } else if (type == "summary") {
             int found = resolveJson(data, {"stats", "matches"}).toInt();

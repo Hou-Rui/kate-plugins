@@ -16,7 +16,9 @@ public:
 
 signals:
     void jumpToFile(const QString &file);
-    void jumpToResult(const QString &file, int line, int start, int end);
+    // byteStart/byteEnd are absolute UTF-8 byte offsets; the receiver maps them
+    // to a Kate cursor (ripgrep's line numbers cannot be trusted across lone '\r').
+    void jumpToResult(const QString &file, qint64 byteStart, qint64 byteEnd);
 
 protected:
     void mousePressEvent(QMouseEvent *event) override;

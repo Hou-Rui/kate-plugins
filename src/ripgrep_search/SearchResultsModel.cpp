@@ -77,9 +77,8 @@ QVector<ReplacementTarget> SearchResultsModel::checkedResults() const
                 continue;
             result.append({
                 item->data(FileNameRole).toString(),
-                item->data(LineNumberRole).toInt(),
-                item->data(StartColumnRole).toInt(),
-                item->data(EndColumnRole).toInt(),
+                item->data(ByteStartRole).toLongLong(),
+                item->data(ByteEndRole).toLongLong(),
             });
         }
     }
@@ -134,7 +133,7 @@ void SearchResultsModel::addMatchedFile(const QString &file)
     invisibleRootItem()->appendRow(d->currentItem);
 }
 
-void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end)
+void SearchResultsModel::addMatched(const QString &file, const QString &text, int line, int start, int end, qint64 byteStart, qint64 byteEnd)
 {
     if (d->currentItem == nullptr)
         return;
@@ -150,6 +149,8 @@ void SearchResultsModel::addMatched(const QString &file, const QString &text, in
     resultItem->setData(line, LineNumberRole);
     resultItem->setData(start, StartColumnRole);
     resultItem->setData(end, EndColumnRole);
+    resultItem->setData(byteStart, ByteStartRole);
+    resultItem->setData(byteEnd, ByteEndRole);
     resultItem->setCheckable(true);
     resultItem->setCheckState(Qt::Checked);
     d->currentItem->appendRow(resultItem);
