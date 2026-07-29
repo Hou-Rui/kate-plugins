@@ -1,171 +1,38 @@
 #include "BookmarksTreePlugin.hpp"
 
+#include "BookmarksTreeView.hpp"
+
 #include <KPluginFactory>
-#include <KTextEditor/Application>
-#include <KTextEditor/Cursor>
-#include <KTextEditor/Document>
-#include <KTextEditor/Editor>
-#include <KTextEditor/MainWindow>
-#include <KTextEditor/View>
-
-#include <QAction>
-#include <QHeaderView>
-#include <QIcon>
-#include <QMenu>
-#include <QVBoxLayout>
-#include <QVariantMap>
-
-#include <algorithm>
-
-using namespace Qt::Literals::StringLiterals;
 
 K_PLUGIN_CLASS_WITH_JSON(BookmarksTreePlugin, "bookmarks_tree.json")
 
+struct BookmarksTreePluginPrivate {
+    BookmarksTreePlugin *q;
+    QList<BookmarksTreeView *> views;
+};
+
 BookmarksTreePlugin::BookmarksTreePlugin(QObject *parent, const QList<QVariant> &)
     : KTextEditor::Plugin(parent)
+    , d(new BookmarksTreePluginPrivate)
 {
+    d->q = this;
+}
+
+BookmarksTreePlugin::~BookmarksTreePlugin()
+{
+    for (auto view : d->views) {
+        view->deleteLater();
+    }
 }
 
 QObject *BookmarksTreePlugin::createView(KTextEditor::MainWindow *mainWindow)
 {
-    return new BookmarksTreeView(this, mainWindow);
-}
-
-void BookmarksTreeView::showMessage(const QString &msg)
-{
-    // clang-format off
-    QVariantMap map {
-        { u"category"_s, u"Bookmarks"_s },
-        { u"categoryIcon"_s, QIcon::fromTheme(u"bookmarks"_s) },
-        { u"type"_s, u"Log"_s },
-        { u"text"_s, msg }
-    };
-    // clang-format on
-    QMetaObject::invokeMethod(m_mainWindow->parent(), "showMessage", Qt::DirectConnection, Q_ARG(QVariantMap, map));
-}
-
-BookmarksTreeView::BookmarksTreeView(BookmarksTreePlugin *plugin, KTextEditor::MainWindow *mainWindow)
-    : QObject(plugin)
-    , m_plugin(plugin)
-    , m_mainWindow(mainWindow)
-{
-    setupUi();
-    connectSignals();
-}
-
-void BookmarksTreeView::setupUi()
-{
-    // clang-format off
-    m_toolView = m_mainWindow->createToolView(m_plugin, u"BookmarksTreePlugin"_s,
-                                              KTextEditor::MainWindow::Left, QIcon::fromTheme(u"bookmarks"_s), tr("Bookmarks"));
-    // clang-format on
-
-    m_treeWidget = new QTreeWidget(m_toolView);
-    m_treeWidget->setSizePolicy(QSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding));
-    m_treeWidget->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_treeWidget->setHeaderLabel(tr("Bookmarks"));
-    m_treeWidget->header()->setDefaultAlignment(Qt::AlignCenter);
-    m_toolView->layout()->addWidget(m_treeWidget);
-}
-
-void BookmarksTreeView::connectSignals()
-{
-    auto app = KTextEditor::Editor::instance()->application();
-    connect(app, &KTextEditor::Application::documentCreated, [this](KTextEditor::Document *document) {
-        connect(document, &KTextEditor::Document::markChanged, [this](auto, auto, auto) {
-            refreshAllBookmarks();
-        });
-        refreshAllBookmarks();
+    auto view = new BookmarksTreeView(this, mainWindow);
+    connect(view, &BookmarksTreeView::destroyed, [this](QObject *view) {
+        d->views.removeAll(static_cast<BookmarksTreeView *>(view));
     });
-
-    connect(m_treeWidget, &QTreeWidget::customContextMenuRequested, [this](const QPoint &pos) {
-        auto menu = new QMenu(m_treeWidget);
-        menu->setAttribute(Qt::WA_DeleteOnClose);
-        auto actionRefresh = menu->addAction(QIcon::fromTheme("view-refresh"), tr("Refresh Bookmarks"));
-        auto actionClear = menu->addAction(QIcon::fromTheme("bookmark-remove"), tr("Clear all Bookmarks"));
-        connect(actionRefresh, &QAction::triggered, this, &BookmarksTreeView::refreshAllBookmarks);
-        connect(actionClear, &QAction::triggered, this, &BookmarksTreeView::clearAllBookmarks);
-        menu->popup(m_treeWidget->mapToGlobal(pos));
-    });
-
-    connect(m_treeWidget, &QTreeWidget::itemDoubleClicked, [this](QTreeWidgetItem *item, auto) {
-        auto document = item->data(0, DocumentRole).value<KTextEditor::Document *>();
-        auto mark = item->data(0, MarkRole).value<KTextEditor::Mark *>();
-        if (document && mark) {
-            jumpToBookmark(document, mark);
-        }
-    });
-}
-
-void BookmarksTreeView::clearAllBookmarks()
-{
-    m_treeWidget->clear();
-    auto documents = KTextEditor::Editor::instance()->documents();
-    for (auto document : documents) {
-        clearBookmarks(document);
-    }
-}
-
-void BookmarksTreeView::clearBookmarks(KTextEditor::Document *document)
-{
-    auto marks = document->marks().values();
-    for (auto mark : marks) {
-        document->clearMark(mark->line);
-    }
-}
-
-void BookmarksTreeView::refreshAllBookmarks()
-{
-    m_treeWidget->clear();
-    auto documents = KTextEditor::Editor::instance()->documents();
-    std::sort(documents.begin(), documents.end(), [](auto d1, auto d2) {
-        return d1->url() < d2->url();
-    });
-    for (auto document : documents) {
-        refreshBookmarks(document);
-    }
-}
-
-void BookmarksTreeView::refreshBookmarks(KTextEditor::Document *document)
-{
-    if (!document || !document->url().isValid()) {
-        return;
-    }
-    auto fileItem = new QTreeWidgetItem({document->url().fileName()});
-    fileItem->setIcon(0, QIcon::fromTheme("document-multiple"));
-    auto marks = document->marks().values();
-    std::sort(marks.begin(), marks.end(), [](auto m1, auto m2) {
-        return m1->line < m2->line;
-    });
-    for (auto mark : marks) {
-        if (!(mark->type & KTextEditor::Document::Bookmark)) {
-            continue;
-        }
-        auto lineContent = document->line(mark->line).trimmed();
-        auto itemContent = QString("%1: %2").arg(mark->line + 1).arg(lineContent);
-        auto item = new QTreeWidgetItem({itemContent});
-        item->setIcon(0, QIcon::fromTheme("bookmarks"));
-        item->setData(0, DocumentRole, QVariant::fromValue(document));
-        item->setData(0, MarkRole, QVariant::fromValue(mark));
-        fileItem->addChild(item);
-    }
-
-    if (fileItem->childCount() == 0) {
-        delete fileItem;
-        return;
-    }
-    m_treeWidget->addTopLevelItem(fileItem);
-    fileItem->setExpanded(true);
-}
-
-void BookmarksTreeView::jumpToBookmark(KTextEditor::Document *document, KTextEditor::Mark *mark)
-{
-    if (!document || !mark) {
-        return;
-    }
-    if (auto view = m_mainWindow->openUrl(document->url())) {
-        view->setCursorPosition(KTextEditor::Cursor(mark->line, 0));
-    }
+    d->views.append(view);
+    return view;
 }
 
 #include "BookmarksTreePlugin.moc"
