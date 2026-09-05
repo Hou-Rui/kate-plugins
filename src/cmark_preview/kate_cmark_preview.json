@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Name": "Cmark Preview",
+        "Description": "Live Markdown preview using cmark.",
+        "Icon": "document-preview",
+        "Version": "1.0",
+        "Category": "Utilities",
+        "Authors": [
+            {
+                "Name": "Hou Rui",
+                "Email": "houruinus@gmail.com"
+            }
+        ],
+        "License": "MIT",
+        "Dependencies": [
+            "ktexteditor"
+        ]
+    }
+}
