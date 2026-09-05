@@ -1,27 +1,25 @@
-# Kate Bookmark Plugin
+# Kate Plugins
 
-## Overview
+A collection of plugins for Kate and KDE Frameworks 6:
 
-A simple plugin to display all Kate bookmarks as a tree in a tool view, available via a sidebar button. KF6 only.
+- `bookmarks_tree` — displays and navigates bookmarks from all open documents in a sidebar tree.
+- `ripgrep_search` — searches and replaces text across a project or the open files using `rg`.
+- `cmark_preview` — renders the active Markdown document live using `cmark`, falling back to `cmark-gfm`.
 
-![Screenshot_20250703_230637](https://github.com/user-attachments/assets/66796f77-20e2-497a-975e-ed82e9b71167)
+## Requirements
 
-## Dependencies
+- Qt 6.5 or newer
+- KDE Frameworks 6.0 or newer
+- Kate built with KF6
+- `rg` for `ripgrep_search`
+- `cmark` or `cmark-gfm` on `PATH` for `cmark_preview`
 
-- Qt 6
-- KDE Framework 6.x
-- Kate Editor built with KF6
-
-## Installation
+## Build and install
 
 ```sh
-cmake . -B build
+cmake -B build
 cmake --build build
 sudo cmake --install build
 ```
 
-`katebookmarksplugin.so` should now be installed in KTextEditor plugin directory.
-
-## Usage
-
-Enable "Bookmarks" plugin in Kate's plugin manager. In menu, enable "View > Sidebar Buttons > Show Bookmarks Button". Now bookmarks button should appear on the left side, click it to show bookmark tool view.Double click on any bookmark to jump to its location.
+After installation, enable the desired plugins in Kate's plugin manager. The bookmark and ripgrep plugins provide sidebar tool views; the Markdown preview follows the active editor document.
