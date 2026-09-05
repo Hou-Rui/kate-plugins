@@ -1,5 +1,7 @@
 #pragma once
 
+#include "CmarkPreviewStyle.hpp"
+
 #include <QObject>
 
 #include <QScopedPointer>
@@ -18,6 +20,8 @@ class CmarkPreviewView : public QObject
 public:
     explicit CmarkPreviewView(CmarkPreviewPlugin *plugin, KTextEditor::MainWindow *mainWindow);
     ~CmarkPreviewView() override;
+
+    void setStyleOptions(const CmarkPreviewStyleOptions &options);
 
 private:
     friend class CmarkPreviewViewPrivate;

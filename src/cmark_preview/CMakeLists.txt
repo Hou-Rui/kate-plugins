@@ -6,6 +6,7 @@ kcoreaddons_add_plugin(${plugin_name}
 target_sources(${plugin_name} PRIVATE
     CmarkCommand.cpp
     CmarkPreviewPlugin.cpp
+    CmarkPreviewStyle.cpp
     CmarkPreviewView.cpp
 )
 

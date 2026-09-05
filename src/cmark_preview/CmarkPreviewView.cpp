@@ -2,6 +2,7 @@
 
 #include "CmarkCommand.hpp"
 #include "CmarkPreviewPlugin.hpp"
+#include "CmarkPreviewStyle.hpp"
 
 #include <KTextEditor/Document>
 #include <KTextEditor/MainWindow>
@@ -29,6 +30,7 @@ public:
     void setupUi();
     void connectSignals();
     void showMessage(const QString &message);
+    void applyStyle();
 
     CmarkPreviewView *q = nullptr;
     CmarkPreviewPlugin *plugin = nullptr;
@@ -40,6 +42,7 @@ public:
     QLabel *statusLabel = nullptr;
     CmarkCommand *renderer = nullptr;
     QTimer *renderTimer = nullptr;
+    CmarkPreviewStyleOptions styleOptions;
 };
 
 CmarkPreviewView::CmarkPreviewView(CmarkPreviewPlugin *plugin, KTextEditor::MainWindow *mainWindow)
@@ -77,6 +80,8 @@ void CmarkPreviewViewPrivate::setupUi()
     preview->setReadOnly(true);
     preview->setPlaceholderText(tr("Open a document to see its Markdown preview."));
     toolView->layout()->addWidget(preview);
+    styleOptions = CmarkPreviewStyle::defaultOptions(preview->font());
+    CmarkPreviewStyle::prepareDocument(preview->document(), styleOptions);
 
     renderTimer = new QTimer(this);
     renderTimer->setSingleShot(true);
@@ -101,7 +106,9 @@ void CmarkPreviewViewPrivate::connectSignals()
             return;
 
         preview->document()->setBaseUrl(document->url());
+        CmarkPreviewStyle::prepareDocument(preview->document(), styleOptions);
         preview->setHtml(html);
+        CmarkPreviewStyle::applyLineHeight(preview->document(), styleOptions.lineHeight);
         statusLabel->setText(tr("Preview updated: %1").arg(document->documentName()));
     });
     connect(renderer, &CmarkCommand::renderFailed, this, [this](const QString &message) {
@@ -149,6 +156,22 @@ void CmarkPreviewViewPrivate::renderDocument()
 {
     if (document && renderer->isAvailable())
         renderer->render(document->text());
+}
+
+void CmarkPreviewView::setStyleOptions(const CmarkPreviewStyleOptions &options)
+{
+    d->styleOptions = options;
+    d->applyStyle();
+}
+
+void CmarkPreviewViewPrivate::applyStyle()
+{
+    CmarkPreviewStyle::prepareDocument(preview->document(), styleOptions);
+    if (document) {
+        renderTimer->stop();
+        statusLabel->setText(tr("Rendering %1...").arg(document->documentName()));
+        renderDocument();
+    }
 }
 
 void CmarkPreviewViewPrivate::showMessage(const QString &message)
