@@ -22,7 +22,7 @@ sudo cmake --install build
 
 Plugins install into the `kf6/ktexteditor` namespace and are loaded by Kate's plugin manager. There is no test suite. `compile_commands.json` is exported into `build/` for clangd/tooling.
 
-Requires Qt ≥ 6.5 (`Core`, `Widgets`) and KF6 ≥ 6.0 (`TextEditor`, `KIO`, `I18n`); the ripgrep plugin needs an `rg` binary on PATH and the Markdown plugin needs `cmark` or `cmark-gfm` on PATH (both checked at runtime, not build time). To rebuild after editing, just re-run `cmake --build build`.
+Requires Qt ≥ 6.5 (`Concurrent`, `Core`, `DBus`, `Widgets`) and KF6 ≥ 6.0 (`TextEditor`, `KIO`, `I18n`); the ripgrep plugin needs an `rg` binary on PATH and optionally `kio-fuse` to search opened `sftp://` documents, while the Markdown plugin needs `cmark` or `cmark-gfm` on PATH. To rebuild after editing, just re-run `cmake --build build`.
 
 ## Code Style
 
@@ -53,7 +53,7 @@ Four collaborating classes wired together in `RipgrepSearchView::setupUi`/`setup
 The Kate sidebar tool-view button is owned by Kate (not our `actionCollection`), so it stays clickable and the user can still open the dock to read the placeholder. The check is one-shot at view construction — there's no live re-check if `rg` is installed afterwards.
 
 ### Search flow
-`startSearch()` clears the model, then searches the **project base dir** (queried from the `kateprojectplugin` via `pluginView(...)->property("projectBaseDir")`) if available, otherwise the set of currently-open local files. Results stream in as `rg` emits them; the view auto-expands each file as its rows are inserted.
+`startSearch()` clears the model, then searches the **project base dir** (queried from the `kateprojectplugin` via `pluginView(...)->property("projectBaseDir")`) if available, otherwise the set of currently-open local and SFTP files. Opened `sftp://` documents are resolved asynchronously through `org.kde.KIOFuse.VFS.mountUrl`; `rg` receives the resulting local FUSE path, while `sourceUrlBySearchPath` retains the original document URL for navigation and replacement. Results stream in as `rg` emits them; the view auto-expands each file when its first result is inserted.
 
 ### cmark_preview internals
 Three collaborating classes, all d-pointer style, wired together in `CmarkPreviewView`:

@@ -12,6 +12,7 @@ A collection of plugins for Kate and KDE Frameworks 6:
 - KDE Frameworks 6.0 or newer
 - Kate built with KF6
 - `rg` for `ripgrep_search`
+- `kio-fuse` for searching opened `sftp://` documents with `ripgrep_search`
 - `cmark` or `cmark-gfm` on `PATH` for `cmark_preview`
 
 ## Build and install

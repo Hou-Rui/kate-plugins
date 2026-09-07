@@ -22,6 +22,6 @@ include(ECMInstallIcons)
 include(ECMDeprecationSettings)
 
 find_package(KF6 REQUIRED COMPONENTS TextEditor KIO I18n)
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Core DBus Widgets)
 
 add_subdirectory(src)

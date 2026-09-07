@@ -16,7 +16,12 @@
 #include <QApplication>
 #include <QByteArray>
 #include <QComboBox>
+#include <QDBusConnection>
+#include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
+#include <QDBusPendingReply>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QFileSystemWatcher>
@@ -31,6 +36,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QPushButton>
+#include <QSet>
 #include <QSharedPointer>
 #include <QSizePolicy>
 #include <QStackedWidget>
@@ -74,6 +80,17 @@ struct PendingReplacement {
 };
 
 using PendingReplacementPtr = QSharedPointer<PendingReplacement>;
+
+struct PendingOpenedFilesSearch {
+    QString term;
+    QStringList paths;
+    QHash<QString, QUrl> sourceUrls;
+    quint64 generation = 0;
+    int pendingMounts = 0;
+    int failedMounts = 0;
+};
+
+using PendingOpenedFilesSearchPtr = QSharedPointer<PendingOpenedFilesSearch>;
 
 // Build Kate-compatible line starts without holding a second full copy of the
 // file in memory. This runs in a worker thread; the one-byte state preserves
@@ -149,9 +166,11 @@ public:
     void invalidateLineStartCache();
     void requestLineStarts(const QString &file, std::function<void(LineStartsPtr)> callback);
     void finishReplaceAll(const PendingReplacementPtr &replacement);
+    void finishOpenedFilesSearch(const PendingOpenedFilesSearchPtr &search);
+    void searchOpenedFiles(const QString &term);
 
     QString projectBaseDir();
-    QStringList openedFiles();
+    QUrl sourceUrlForFile(const QString &file) const;
     KTextEditor::Range mapToKate(const LineStarts &starts, qint64 byteStart, qint64 byteEnd, KTextEditor::Document *doc);
     KTextEditor::Document *documentForFile(const QString &file, bool *wasOpen);
     QAction *addAction(const QString &name, const QString &iconName, const QString &text);
@@ -192,6 +211,7 @@ public:
     quint64 searchGeneration = 0;
     quint64 navigationSerial = 0;
     PendingReplacementPtr pendingReplacement;
+    QHash<QString, QUrl> sourceUrlBySearchPath;
 };
 
 RipgrepSearchView::RipgrepSearchView(RipgrepSearchPlugin *plugin, KTextEditor::MainWindow *mainWindow)
@@ -377,11 +397,11 @@ void RipgrepSearchViewPrivate::setupUi()
     connect(showReplaceAction, &QAction::toggled, resultsView, &SearchResultsView::setShowCheckboxes);
     connect(resultsView, &SearchResultsView::jumpToFile, [this](const QString &file) {
         ++navigationSerial;
-        mainWindow->openUrl(QUrl::fromLocalFile(file));
+        mainWindow->openUrl(sourceUrlForFile(file));
     });
     connect(resultsView, &SearchResultsView::jumpToResult, [this](const QString &file, qint64 byteStart, qint64 byteEnd) {
         const quint64 serial = ++navigationSerial;
-        if (auto view = mainWindow->openUrl(QUrl::fromLocalFile(file))) {
+        if (auto view = mainWindow->openUrl(sourceUrlForFile(file))) {
             const QPointer<KTextEditor::View> guardedView(view);
             const quint64 generation = searchGeneration;
             requestLineStarts(file, [this, guardedView, byteStart, byteEnd, generation, serial](const LineStartsPtr &starts) {
@@ -489,18 +509,100 @@ QString RipgrepSearchViewPrivate::projectBaseDir()
     return QString();
 }
 
-QStringList RipgrepSearchViewPrivate::openedFiles()
+QUrl RipgrepSearchViewPrivate::sourceUrlForFile(const QString &file) const
 {
-    QStringList result;
-    auto editor = KTextEditor::Editor::instance();
-    for (auto doc : editor->documents()) {
-        if (doc->url().isLocalFile()) {
-            auto fileName = doc->url().toLocalFile();
-            if (QFileInfo::exists(fileName))
-                result.append(fileName);
+    const QString path = QDir::cleanPath(file);
+    if (auto it = sourceUrlBySearchPath.constFind(path); it != sourceUrlBySearchPath.constEnd())
+        return it.value();
+    return QUrl::fromLocalFile(path);
+}
+
+void RipgrepSearchViewPrivate::searchOpenedFiles(const QString &term)
+{
+    auto search = PendingOpenedFilesSearchPtr::create();
+    search->term = term;
+    search->generation = searchGeneration;
+
+    QSet<QUrl> seenUrls;
+    for (auto doc : KTextEditor::Editor::instance()->documents()) {
+        const QUrl url = doc->url();
+        if (url.isEmpty() || seenUrls.contains(url))
+            continue;
+        seenUrls.insert(url);
+
+        if (url.isLocalFile()) {
+            const QString path = QDir::cleanPath(url.toLocalFile());
+            if (QFileInfo::exists(path)) {
+                search->paths.append(path);
+                search->sourceUrls.insert(path, url);
+            }
+            continue;
         }
+
+        if (url.scheme().compare(QStringLiteral("sftp"), Qt::CaseInsensitive) != 0)
+            continue;
+
+        const QString fileName = url.fileName(QUrl::FullyDecoded);
+        if (fileName.isEmpty()) {
+            ++search->failedMounts;
+            continue;
+        }
+
+        QUrl mountUrl = url.adjusted(QUrl::RemoveFilename | QUrl::RemoveQuery | QUrl::RemoveFragment);
+        mountUrl.setPassword(QString());
+
+        QDBusMessage message = QDBusMessage::createMethodCall(QStringLiteral("org.kde.KIOFuse"),
+                                                              QStringLiteral("/org/kde/KIOFuse"),
+                                                              QStringLiteral("org.kde.KIOFuse.VFS"),
+                                                              QStringLiteral("mountUrl"));
+        message << mountUrl.toString(QUrl::FullyEncoded);
+
+        ++search->pendingMounts;
+        auto watcher = new QDBusPendingCallWatcher(QDBusConnection::sessionBus().asyncCall(message), this);
+        connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, watcher, search, url, fileName] {
+            const QDBusPendingReply<QString> reply = *watcher;
+            watcher->deleteLater();
+
+            if (search->generation != searchGeneration)
+                return;
+
+            if (reply.isError()) {
+                ++search->failedMounts;
+                qWarning() << "Could not mount opened SFTP file through KIO-FUSE:" << url << reply.error().message();
+            } else {
+                const QString path = QDir::cleanPath(QDir(reply.value()).filePath(fileName));
+                search->paths.append(path);
+                search->sourceUrls.insert(path, url);
+            }
+
+            if (--search->pendingMounts == 0)
+                finishOpenedFilesSearch(search);
+        });
     }
-    return result;
+
+    if (search->pendingMounts > 0) {
+        statusBar->showMessage(tr("Resolving opened SFTP files..."));
+        return;
+    }
+    finishOpenedFilesSearch(search);
+}
+
+void RipgrepSearchViewPrivate::finishOpenedFilesSearch(const PendingOpenedFilesSearchPtr &search)
+{
+    if (search->generation != searchGeneration)
+        return;
+
+    search->paths.removeDuplicates();
+    sourceUrlBySearchPath = search->sourceUrls;
+    if (!search->paths.isEmpty()) {
+        statusBar->showMessage(tr("Searching..."));
+        rg->searchInFiles(search->term, search->paths);
+    } else if (search->failedMounts > 0) {
+        statusBar->showMessage(tr("Could not access the opened SFTP files through KIO-FUSE."));
+    } else {
+        statusBar->showMessage(tr("No project or local files to search."));
+        qInfo() << "No project, local files, or opened SFTP files to search.";
+    }
 }
 
 void RipgrepSearchViewPrivate::invalidateLineStartCache()
@@ -574,7 +676,7 @@ KTextEditor::Range RipgrepSearchViewPrivate::mapToKate(const LineStarts &starts,
 KTextEditor::Document *RipgrepSearchViewPrivate::documentForFile(const QString &file, bool *wasOpen)
 {
     auto editor = KTextEditor::Editor::instance();
-    auto url = QUrl::fromLocalFile(file);
+    auto url = sourceUrlForFile(file);
     for (auto doc : editor->documents()) {
         if (doc->url() == url) {
             if (wasOpen)
@@ -704,16 +806,14 @@ void RipgrepSearchViewPrivate::startSearch()
     // Results are about to be rebuilt against the current on-disk contents, so
     // any cached line-start maps (a file may have changed) are now stale.
     invalidateLineStartCache();
+    sourceUrlBySearchPath.clear();
 
     statusBar->showMessage(tr("Searching..."));
     resultsModel->clear();
     if (auto baseDir = projectBaseDir(); !baseDir.isEmpty()) {
         rg->searchInDir(term, baseDir);
-    } else if (auto files = openedFiles(); !files.isEmpty()) {
-        rg->searchInFiles(term, files);
     } else {
-        statusBar->showMessage(tr("No project or local files to search."));
-        qInfo() << "No project or local files to search.";
+        searchOpenedFiles(term);
     }
 }
 
