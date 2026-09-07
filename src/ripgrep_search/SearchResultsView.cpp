@@ -161,7 +161,8 @@ SearchResultsView::SearchResultsView(SearchResultsModel *model, QWidget *parent)
     setEditTriggers(NoEditTriggers);
 
     connect(model, &SearchResultsModel::rowsInserted, [this](const QModelIndex &parent, auto, auto) {
-        expand(parent);
+        if (parent.isValid() && !isExpanded(parent))
+            expand(parent);
     });
 
     d->createActions();

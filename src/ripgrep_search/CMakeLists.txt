@@ -17,5 +17,6 @@ target_sources(${plugin_name} PRIVATE
 target_link_libraries(${plugin_name}
     KF6::KIOCore
     KF6::TextEditor
+    Qt6::Concurrent
     Qt6::Widgets
 )

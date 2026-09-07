@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QTimer>
 
 struct SearchOptions {
     bool wholeWord = false;
@@ -16,12 +17,15 @@ struct SearchOptions {
 
 struct RipgrepCommandPrivate {
     QStringList buildArgs(const QString &term, const QString &dir, const QStringList &files);
+    void drainOutput();
     void parseMatch(const QByteArray &match);
+    void scheduleOutputDrain();
     void search(const QString &term, const QString &dir, const QStringList &files);
 
     RipgrepCommand *q;
     QProcess *process = nullptr;
     SearchOptions options;
+    bool outputDrainScheduled = false;
 };
 
 RipgrepCommand::RipgrepCommand(QObject *parent)
@@ -91,20 +95,57 @@ void RipgrepCommandPrivate::search(const QString &term, const QString &dir, cons
     }
 
     if (process != nullptr) {
-        if (process->state() != QProcess::NotRunning) {
-            process->terminate();
-            process->waitForFinished();
+        auto oldProcess = process;
+        QObject::disconnect(oldProcess, nullptr, q, nullptr);
+        if (oldProcess->state() == QProcess::NotRunning) {
+            oldProcess->deleteLater();
+        } else {
+            q->connect(oldProcess, &QProcess::finished, oldProcess, &QObject::deleteLater);
+            oldProcess->terminate();
+            QTimer::singleShot(1000, oldProcess, [oldProcess] {
+                if (oldProcess->state() != QProcess::NotRunning)
+                    oldProcess->kill();
+            });
         }
-        process->deleteLater();
     }
     process = new QProcess(q);
     q->connect(process, &QProcess::readyReadStandardOutput, q, [this] {
-        while (process->canReadLine()) {
-            auto line = process->readLine();
-            parseMatch(line.trimmed());
-        }
+        scheduleOutputDrain();
+    });
+    q->connect(process, &QProcess::finished, q, [this] {
+        scheduleOutputDrain();
     });
     process->start("rg", args, QIODevice::ReadOnly);
+}
+
+void RipgrepCommandPrivate::scheduleOutputDrain()
+{
+    if (outputDrainScheduled)
+        return;
+    outputDrainScheduled = true;
+    QTimer::singleShot(0, q, [this] {
+        outputDrainScheduled = false;
+        drainOutput();
+    });
+}
+
+void RipgrepCommandPrivate::drainOutput()
+{
+    if (!process)
+        return;
+
+    // Keep each event-loop turn bounded. A search with millions of result
+    // lines must not monopolise the GUI thread while JSON is parsed and model
+    // rows are created.
+    constexpr int maxLinesPerTurn = 128;
+    int linesRead = 0;
+    while (process->canReadLine() && linesRead < maxLinesPerTurn) {
+        const auto line = process->readLine();
+        parseMatch(line.trimmed());
+        ++linesRead;
+    }
+    if (process->canReadLine())
+        scheduleOutputDrain();
 }
 
 void RipgrepCommand::searchInDir(const QString &term, const QString &dir)
