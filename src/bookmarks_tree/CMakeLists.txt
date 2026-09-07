@@ -1,4 +1,4 @@
-set(plugin_name bookmarks_tree)
+set(plugin_name kate_bookmarks_tree)
 
 kcoreaddons_add_plugin(${plugin_name}
     INSTALL_NAMESPACE "kf6/ktexteditor")
