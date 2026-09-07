@@ -712,7 +712,8 @@ void RipgrepSearchViewPrivate::startSearch()
     } else if (auto files = openedFiles(); !files.isEmpty()) {
         rg->searchInFiles(term, files);
     } else {
-        qInfo() << "No opened documents, not performing searching.";
+        statusBar->showMessage(tr("No project or local files to search."));
+        qInfo() << "No project or local files to search.";
     }
 }
 
